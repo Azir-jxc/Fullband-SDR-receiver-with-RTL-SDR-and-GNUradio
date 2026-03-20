@@ -36,33 +36,12 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '0'
+    value: '3'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [870, 485]
-    rotation: 0
-    state: true
-- name: freq
-  id: variable_qtgui_range
-  parameters:
-    comment: ''
-    gui_hint: 4,3,1,1
-    label: ''
-    min_len: '200'
-    orient: Qt.Vertical
-    rangeType: float
-    start: 8e6
-    step: 100e3
-    stop: 500e6
-    value: 124.4e6
-    widget: counter_slider
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [6, 466]
+    coordinate: [2414, 396]
     rotation: 0
     state: true
 - name: gain_bb
@@ -101,6 +80,18 @@ blocks:
     coordinate: [101, 156]
     rotation: 0
     state: true
+- name: offset_freq
+  id: variable
+  parameters:
+    comment: ''
+    value: target_freq-sdr_freq
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [998, 588]
+    rotation: 0
+    state: true
 - name: offset_frequence
   id: variable
   parameters:
@@ -113,6 +104,18 @@ blocks:
     coordinate: [271, 515]
     rotation: 0
     state: true
+- name: receive_width
+  id: variable
+  parameters:
+    comment: ''
+    value: 100e3
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1609, 387]
+    rotation: 0
+    state: true
 - name: samp_rate
   id: variable
   parameters:
@@ -122,7 +125,28 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [211, 611]
+    coordinate: [107, 610]
+    rotation: 0
+    state: true
+- name: sdr_freq
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 4,3,1,1
+    label: ''
+    min_len: '200'
+    orient: Qt.Vertical
+    rangeType: float
+    start: 8e6
+    step: 100e3
+    stop: 500e6
+    value: 124.4e6
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [6, 466]
     rotation: 0
     state: true
 - name: sdr_samp_rate
@@ -146,7 +170,31 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1467, 10]
+    coordinate: [2999, 18]
+    rotation: 0
+    state: true
+- name: syn_mode
+  id: variable
+  parameters:
+    comment: ''
+    value: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [622, 502]
+    rotation: 0
+    state: true
+- name: target_freq
+  id: variable
+  parameters:
+    comment: ''
+    value: 124.5e6
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [857, 591]
     rotation: 0
     state: true
 - name: analog_agc_xx_0
@@ -166,7 +214,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1934, 129]
+    coordinate: [3466, 137]
     rotation: 0
     state: disabled
 - name: analog_agc_xx_0_0
@@ -186,7 +234,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1891, 443]
+    coordinate: [3423, 451]
     rotation: 0
     state: enabled
 - name: analog_agc_xx_0_1
@@ -206,7 +254,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1891, 563]
+    coordinate: [3423, 571]
     rotation: 0
     state: enabled
 - name: analog_agc_xx_0_2
@@ -226,7 +274,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2391, 238]
+    coordinate: [3923, 246]
     rotation: 0
     state: disabled
 - name: analog_am_demod_cf_0
@@ -234,10 +282,10 @@ blocks:
   parameters:
     affinity: ''
     alias: ''
-    audio_decim: '2'
+    audio_decim: '1'
     audio_pass: '5000'
     audio_stop: '5500'
-    chan_rate: 96e3
+    chan_rate: sdr_samp_rate/50
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
@@ -245,7 +293,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1795, -11]
+    coordinate: [3153, 29]
     rotation: 0
     state: enabled
 - name: analog_nbfm_rx_0
@@ -258,13 +306,13 @@ blocks:
     max_dev: 5.0e3
     maxoutbuf: '0'
     minoutbuf: '0'
-    quad_rate: int(sdr_samp_rate/25)
+    quad_rate: int(sdr_samp_rate/50)
     tau: 75e-6
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1819, 219]
+    coordinate: [3351, 227]
     rotation: 0
     state: enabled
 - name: analog_sig_source_x_0
@@ -289,6 +337,28 @@ blocks:
     coordinate: [152, 466]
     rotation: 0
     state: disabled
+- name: analog_sig_source_x_1
+  id: analog_sig_source_x
+  parameters:
+    affinity: ''
+    alias: ''
+    amp: '1'
+    comment: ''
+    freq: -offset_freq
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    offset: '0'
+    phase: '0'
+    samp_rate: sdr_samp_rate
+    type: complex
+    waveform: analog.GR_COS_WAVE
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [905, 449]
+    rotation: 0
+    state: true
 - name: analog_simple_squelch_cc_0
   id: analog_simple_squelch_cc
   parameters:
@@ -303,7 +373,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1391, 114]
+    coordinate: [2923, 122]
     rotation: 0
     state: disabled
 - name: analog_simple_squelch_cc_1
@@ -320,7 +390,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1572, 237]
+    coordinate: [3104, 245]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_2
@@ -337,7 +407,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1551, 347]
+    coordinate: [3083, 355]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_3
@@ -354,7 +424,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1522, 482]
+    coordinate: [3054, 490]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_4
@@ -371,7 +441,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1571, 579]
+    coordinate: [3103, 587]
     rotation: 0
     state: enabled
 - name: analog_wfm_rcv_0
@@ -379,16 +449,16 @@ blocks:
   parameters:
     affinity: ''
     alias: ''
-    audio_decimation: '10'
+    audio_decimation: '5'
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    quad_rate: sdr_samp_rate / 5
+    quad_rate: sdr_samp_rate / 10
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1827, 345]
+    coordinate: [3359, 353]
     rotation: 0
     state: enabled
 - name: audio_sink_0
@@ -405,7 +475,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2603, 281]
+    coordinate: [4135, 289]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0
@@ -415,14 +485,14 @@ blocks:
     alias: ''
     beta: '6.76'
     comment: ''
-    decim: '25'
+    decim: '5'
     gain: '1'
     high_cutoff_freq: '2800'
     interp: '1'
     low_cutoff_freq: '200'
     maxoutbuf: '0'
     minoutbuf: '0'
-    samp_rate: sdr_samp_rate
+    samp_rate: sdr_samp_rate/10
     type: fir_filter_ccc
     width: '1000'
     win: firdes.WIN_HAMMING
@@ -430,7 +500,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1226, 439]
+    coordinate: [2758, 448]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0_0
@@ -440,14 +510,14 @@ blocks:
     alias: ''
     beta: '6.76'
     comment: ''
-    decim: '25'
+    decim: '5'
     gain: '1'
-    high_cutoff_freq: '200'
+    high_cutoff_freq: '-200'
     interp: '1'
     low_cutoff_freq: '-2800'
     maxoutbuf: '0'
     minoutbuf: '0'
-    samp_rate: sdr_samp_rate
+    samp_rate: sdr_samp_rate/10
     type: fir_filter_ccc
     width: '1000'
     win: firdes.WIN_HAMMING
@@ -455,7 +525,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1235, 605]
+    coordinate: [2767, 613]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_mag_0
@@ -471,7 +541,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1558, 134]
+    coordinate: [3090, 142]
     rotation: 0
     state: disabled
 - name: blocks_complex_to_real_0
@@ -487,7 +557,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1739, 473]
+    coordinate: [3271, 481]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_real_0_0
@@ -503,7 +573,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1739, 593]
+    coordinate: [3271, 601]
     rotation: 0
     state: enabled
 - name: blocks_keep_m_in_n_0
@@ -543,6 +613,24 @@ blocks:
     coordinate: [303, 421]
     rotation: 0
     state: disabled
+- name: blocks_multiply_xx_1
+  id: blocks_multiply_xx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '2'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1184, 288]
+    rotation: 0
+    state: true
 - name: blocks_selector_0
   id: blocks_selector
   parameters:
@@ -553,7 +641,7 @@ blocks:
     input_index: '0'
     maxoutbuf: '0'
     minoutbuf: '0'
-    num_inputs: '1'
+    num_inputs: '0'
     num_outputs: '5'
     output_index: demod_mode
     showports: 'True'
@@ -563,7 +651,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [817, 223]
+    coordinate: [2400, 206]
     rotation: 0
     state: true
 - name: blocks_selector_0_0
@@ -586,7 +674,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2210, 201]
+    coordinate: [3742, 209]
     rotation: 0
     state: true
 - name: blocks_stream_to_vector_0
@@ -640,7 +728,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1742, 120]
+    coordinate: [3274, 128]
     rotation: 0
     state: disabled
 - name: fft_vxx_0
@@ -672,12 +760,12 @@ blocks:
     beta: '6.76'
     comment: ''
     cutoff_freq: '7500'
-    decim: '25'
+    decim: '5'
     gain: '1'
     interp: '1'
     maxoutbuf: '0'
     minoutbuf: '0'
-    samp_rate: sdr_samp_rate
+    samp_rate: sdr_samp_rate/10
     type: fir_filter_ccf
     width: '5000'
     win: firdes.WIN_HAMMING
@@ -685,7 +773,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1219, 162]
+    coordinate: [2751, 170]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_0
@@ -696,12 +784,12 @@ blocks:
     beta: '6.76'
     comment: ''
     cutoff_freq: '5000'
-    decim: '25'
+    decim: '5'
     gain: '1'
     interp: '1'
     maxoutbuf: '0'
     minoutbuf: '0'
-    samp_rate: sdr_samp_rate/25
+    samp_rate: sdr_samp_rate/10
     type: fir_filter_ccf
     width: '5000'
     win: firdes.WIN_HAMMING
@@ -709,7 +797,31 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1236, 25]
+    coordinate: [2769, 31]
+    rotation: 0
+    state: enabled
+- name: low_pass_filter_0_0_0
+  id: low_pass_filter
+  parameters:
+    affinity: ''
+    alias: ''
+    beta: '6.76'
+    comment: ''
+    cutoff_freq: receive_width
+    decim: '10'
+    gain: '1'
+    interp: '1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    samp_rate: sdr_samp_rate
+    type: fir_filter_ccf
+    width: '5000'
+    win: firdes.WIN_HAMMING
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1595, 241]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_1
@@ -720,12 +832,12 @@ blocks:
     beta: '6.76'
     comment: ''
     cutoff_freq: '75000'
-    decim: '5'
+    decim: '1'
     gain: '1'
     interp: '1'
     maxoutbuf: '0'
     minoutbuf: '0'
-    samp_rate: sdr_samp_rate
+    samp_rate: sdr_samp_rate/10
     type: fir_filter_ccf
     width: '25000'
     win: firdes.WIN_HAMMING
@@ -733,7 +845,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1228, 298]
+    coordinate: [2753, 309]
     rotation: 0
     state: enabled
 - name: qtgui_freq_sink_x_0
@@ -754,7 +866,7 @@ blocks:
     autoscale: 'False'
     average: '1.0'
     axislabels: 'True'
-    bw: samp_rate
+    bw: sdr_samp_rate
     color1: '"blue"'
     color10: '"dark blue"'
     color2: '"red"'
@@ -767,7 +879,7 @@ blocks:
     color9: '"dark green"'
     comment: ''
     ctrlpanel: 'False'
-    fc: freq
+    fc: sdr_freq
     fftsize: '1024'
     freqhalf: 'True'
     grid: 'True'
@@ -1071,7 +1183,7 @@ blocks:
     dc_offset_mode7: '0'
     dc_offset_mode8: '0'
     dc_offset_mode9: '0'
-    freq0: freq
+    freq0: sdr_freq
     freq1: 99.1e6
     freq10: 100e6
     freq11: 100e6
@@ -1314,6 +1426,7 @@ connections:
 - [analog_am_demod_cf_0, '0', blocks_selector_0_0, '0']
 - [analog_nbfm_rx_0, '0', blocks_selector_0_0, '1']
 - [analog_sig_source_x_0, '0', blocks_multiply_xx_0, '1']
+- [analog_sig_source_x_1, '0', blocks_multiply_xx_1, '1']
 - [analog_simple_squelch_cc_0, '0', blocks_complex_to_mag_0, '0']
 - [analog_simple_squelch_cc_1, '0', analog_nbfm_rx_0, '0']
 - [analog_simple_squelch_cc_2, '0', analog_wfm_rcv_0, '0']
@@ -1327,6 +1440,7 @@ connections:
 - [blocks_complex_to_real_0, '0', analog_agc_xx_0_0, '0']
 - [blocks_complex_to_real_0_0, '0', analog_agc_xx_0_1, '0']
 - [blocks_multiply_xx_0, '0', qtgui_freq_sink_x_0_0, '0']
+- [blocks_multiply_xx_1, '0', low_pass_filter_0_0_0, '0']
 - [blocks_selector_0, '0', low_pass_filter_0_0, '0']
 - [blocks_selector_0, '1', low_pass_filter_0, '0']
 - [blocks_selector_0, '2', low_pass_filter_0_1, '0']
@@ -1342,9 +1456,10 @@ connections:
 - [low_pass_filter_0, '0', analog_simple_squelch_cc_1, '0']
 - [low_pass_filter_0_0, '0', analog_am_demod_cf_0, '0']
 - [low_pass_filter_0_0, '0', analog_simple_squelch_cc_0, '0']
+- [low_pass_filter_0_0_0, '0', blocks_selector_0, '0']
 - [low_pass_filter_0_1, '0', analog_simple_squelch_cc_2, '0']
 - [rtlsdr_source_0, '0', blocks_multiply_xx_0, '0']
-- [rtlsdr_source_0, '0', blocks_selector_0, '0']
+- [rtlsdr_source_0, '0', blocks_multiply_xx_1, '0']
 - [rtlsdr_source_0, '0', blocks_stream_to_vector_0, '0']
 - [rtlsdr_source_0, '0', blocks_stream_to_vector_0_0, '0']
 - [rtlsdr_source_0, '0', qtgui_freq_sink_x_0, '0']

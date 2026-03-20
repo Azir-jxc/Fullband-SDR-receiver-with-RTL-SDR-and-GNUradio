@@ -46,6 +46,12 @@ class Ui_MainWindow:
         self.mode_combo.setMinimumSize(100, 40)
         ctrl_layout.addWidget(self.mode_combo)
 
+        # ++ 新增：调谐模式切换按钮 ++
+        self.tuning_mode_btn = QtWidgets.QPushButton("模式: 中央调谐")
+        self.tuning_mode_btn.setMinimumSize(120, 40)
+        ctrl_layout.addWidget(self.tuning_mode_btn)
+
+      
         # 新增：增益控制展开按钮
         self.gain_toggle_btn = QtWidgets.QPushButton("增益设置 ▼")
         self.gain_toggle_btn.setMinimumSize(100, 40)
@@ -53,6 +59,8 @@ class Ui_MainWindow:
         ctrl_layout.addWidget(self.gain_toggle_btn)
 
         ctrl_layout.addStretch() 
+
+    
 
         # 调频旋钮
         dial_label = QtWidgets.QLabel("Freq")

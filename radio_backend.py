@@ -29,13 +29,29 @@ class RadioBackend:
             
         return latest_fft
 
-    def set_center_freq(self, freq_hz):
-        """向 GRC 发送改变频率指令"""
-        self.gr_rpc.set_freq(freq_hz)
+ # 替换原有的 set/get_center_freq
+    def set_sdr_freq(self, freq_hz):
+        """设置 SDR 硬件中心频率"""
+        try:
+            self.gr_rpc.set_sdr_freq(freq_hz)
+        except Exception as e:
+            pass # 避免拖拽时终端被报错淹没
 
-    def get_center_freq(self):
-        """从 GRC 获取当前真实频率"""
-        return self.gr_rpc.get_freq()
+    def get_sdr_freq(self):
+        try: return self.gr_rpc.get_sdr_freq()
+        except: return 0.0
+
+    def set_target_freq(self, freq_hz):
+        """设置解调目标频率 (软件 VFO)"""
+        try:
+            self.gr_rpc.set_target_freq(freq_hz)
+        except Exception as e:
+            pass
+
+    def get_target_freq(self):
+        try: return self.gr_rpc.get_target_freq()
+        except: return 0.0
+        
     def set_demod_mode(self, mode_index):
         """向 GRC 发送改变解调模式指令 (需在 GRC 设变量 demod_mode)"""
         try:

@@ -84,22 +84,26 @@ class top_block(gr.top_block, Qt.QWidget):
         ##################################################
         # Variables
         ##################################################
+        self.target_freq = target_freq = 124.5e6
+        self.sdr_freq = sdr_freq = 124.4e6
+        self.syn_mode = syn_mode = 0
         self.squelch = squelch = -70
         self.sdr_samp_rate = sdr_samp_rate = 2.4e6
         self.samp_rate = samp_rate = 48000
+        self.receive_width = receive_width = 100e3
         self.offset_frequence = offset_frequence = 0
+        self.offset_freq = offset_freq = target_freq-sdr_freq
         self.gain_rf = gain_rf = 20
         self.gain_if = gain_if = 20
         self.gain_bb = gain_bb = 20
-        self.freq = freq = 124.4e6
-        self.demod_mode = demod_mode = 0
+        self.demod_mode = demod_mode = 3
 
         ##################################################
         # Blocks
         ##################################################
-        self._freq_range = Range(8e6, 500e6, 100e3, 124.4e6, 200)
-        self._freq_win = RangeWidget(self._freq_range, self.set_freq, 'freq', "counter_slider", float)
-        self.top_grid_layout.addWidget(self._freq_win, 4, 3, 1, 1)
+        self._sdr_freq_range = Range(8e6, 500e6, 100e3, 124.4e6, 200)
+        self._sdr_freq_win = RangeWidget(self._sdr_freq_range, self.set_sdr_freq, 'sdr_freq', "counter_slider", float)
+        self.top_grid_layout.addWidget(self._sdr_freq_win, 4, 3, 1, 1)
         for r in range(4, 5):
             self.top_grid_layout.setRowStretch(r, 1)
         for c in range(3, 4):
@@ -116,7 +120,7 @@ class top_block(gr.top_block, Qt.QWidget):
         )
         self.rtlsdr_source_0.set_time_unknown_pps(osmosdr.time_spec_t())
         self.rtlsdr_source_0.set_sample_rate(sdr_samp_rate)
-        self.rtlsdr_source_0.set_center_freq(freq, 0)
+        self.rtlsdr_source_0.set_center_freq(sdr_freq, 0)
         self.rtlsdr_source_0.set_freq_corr(0, 0)
         self.rtlsdr_source_0.set_dc_offset_mode(0, 0)
         self.rtlsdr_source_0.set_iq_balance_mode(0, 0)
@@ -129,8 +133,8 @@ class top_block(gr.top_block, Qt.QWidget):
         self.qtgui_freq_sink_x_0 = qtgui.freq_sink_c(
             1024, #size
             firdes.WIN_BLACKMAN_hARRIS, #wintype
-            freq, #fc
-            samp_rate, #bw
+            sdr_freq, #fc
+            sdr_samp_rate, #bw
             "", #name
             1
         )
@@ -167,28 +171,37 @@ class top_block(gr.top_block, Qt.QWidget):
         self._qtgui_freq_sink_x_0_win = sip.wrapinstance(self.qtgui_freq_sink_x_0.pyqwidget(), Qt.QWidget)
         self.top_grid_layout.addWidget(self._qtgui_freq_sink_x_0_win)
         self.low_pass_filter_0_1 = filter.fir_filter_ccf(
-            5,
+            1,
             firdes.low_pass(
                 1,
-                sdr_samp_rate,
+                sdr_samp_rate/10,
                 75000,
                 25000,
                 firdes.WIN_HAMMING,
                 6.76))
-        self.low_pass_filter_0_0 = filter.fir_filter_ccf(
-            25,
+        self.low_pass_filter_0_0_0 = filter.fir_filter_ccf(
+            10,
             firdes.low_pass(
                 1,
-                sdr_samp_rate/25,
+                sdr_samp_rate,
+                receive_width,
+                5000,
+                firdes.WIN_HAMMING,
+                6.76))
+        self.low_pass_filter_0_0 = filter.fir_filter_ccf(
+            5,
+            firdes.low_pass(
+                1,
+                sdr_samp_rate/10,
                 5000,
                 5000,
                 firdes.WIN_HAMMING,
                 6.76))
         self.low_pass_filter_0 = filter.fir_filter_ccf(
-            25,
+            5,
             firdes.low_pass(
                 1,
-                sdr_samp_rate,
+                sdr_samp_rate/10,
                 7500,
                 5000,
                 firdes.WIN_HAMMING,
@@ -200,23 +213,24 @@ class top_block(gr.top_block, Qt.QWidget):
         self.blocks_selector_0_0.set_enabled(True)
         self.blocks_selector_0 = blocks.selector(gr.sizeof_gr_complex*1,0,demod_mode)
         self.blocks_selector_0.set_enabled(True)
+        self.blocks_multiply_xx_1 = blocks.multiply_vcc(1)
         self.blocks_complex_to_real_0_0 = blocks.complex_to_real(1)
         self.blocks_complex_to_real_0 = blocks.complex_to_real(1)
         self.band_pass_filter_0_0 = filter.fir_filter_ccc(
-            25,
+            5,
             firdes.complex_band_pass(
                 1,
-                sdr_samp_rate,
+                sdr_samp_rate/10,
                 -2800,
-                200,
+                -200,
                 1000,
                 firdes.WIN_HAMMING,
                 6.76))
         self.band_pass_filter_0 = filter.fir_filter_ccc(
-            25,
+            5,
             firdes.complex_band_pass(
                 1,
-                sdr_samp_rate,
+                sdr_samp_rate/10,
                 200,
                 2800,
                 1000,
@@ -224,22 +238,23 @@ class top_block(gr.top_block, Qt.QWidget):
                 6.76))
         self.audio_sink_0 = audio.sink(48000, '', False)
         self.analog_wfm_rcv_0 = analog.wfm_rcv(
-        	quad_rate=sdr_samp_rate / 5,
-        	audio_decimation=10,
+        	quad_rate=sdr_samp_rate / 10,
+        	audio_decimation=5,
         )
         self.analog_simple_squelch_cc_4 = analog.simple_squelch_cc(squelch, 1)
         self.analog_simple_squelch_cc_3 = analog.simple_squelch_cc(squelch, 1)
         self.analog_simple_squelch_cc_2 = analog.simple_squelch_cc(squelch, 1)
         self.analog_simple_squelch_cc_1 = analog.simple_squelch_cc(squelch, 1)
+        self.analog_sig_source_x_1 = analog.sig_source_c(sdr_samp_rate, analog.GR_COS_WAVE, -offset_freq, 1, 0, 0)
         self.analog_nbfm_rx_0 = analog.nbfm_rx(
         	audio_rate=48000,
-        	quad_rate=int(sdr_samp_rate/25),
+        	quad_rate=int(sdr_samp_rate/50),
         	tau=75e-6,
         	max_dev=5.0e3,
           )
         self.analog_am_demod_cf_0 = analog.am_demod_cf(
-        	channel_rate=96e3,
-        	audio_decim=2,
+        	channel_rate=sdr_samp_rate/50,
+        	audio_decim=1,
         	audio_pass=5000,
         	audio_stop=5500,
         )
@@ -257,6 +272,7 @@ class top_block(gr.top_block, Qt.QWidget):
         self.connect((self.analog_agc_xx_0_1, 0), (self.blocks_selector_0_0, 4))
         self.connect((self.analog_am_demod_cf_0, 0), (self.blocks_selector_0_0, 0))
         self.connect((self.analog_nbfm_rx_0, 0), (self.blocks_selector_0_0, 1))
+        self.connect((self.analog_sig_source_x_1, 0), (self.blocks_multiply_xx_1, 1))
         self.connect((self.analog_simple_squelch_cc_1, 0), (self.analog_nbfm_rx_0, 0))
         self.connect((self.analog_simple_squelch_cc_2, 0), (self.analog_wfm_rcv_0, 0))
         self.connect((self.analog_simple_squelch_cc_3, 0), (self.blocks_complex_to_real_0, 0))
@@ -266,6 +282,7 @@ class top_block(gr.top_block, Qt.QWidget):
         self.connect((self.band_pass_filter_0_0, 0), (self.analog_simple_squelch_cc_4, 0))
         self.connect((self.blocks_complex_to_real_0, 0), (self.analog_agc_xx_0_0, 0))
         self.connect((self.blocks_complex_to_real_0_0, 0), (self.analog_agc_xx_0_1, 0))
+        self.connect((self.blocks_multiply_xx_1, 0), (self.low_pass_filter_0_0_0, 0))
         self.connect((self.blocks_selector_0, 3), (self.band_pass_filter_0, 0))
         self.connect((self.blocks_selector_0, 4), (self.band_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 1), (self.low_pass_filter_0, 0))
@@ -277,8 +294,9 @@ class top_block(gr.top_block, Qt.QWidget):
         self.connect((self.fft_vxx_0, 0), (self.zeromq_pub_sink_0, 0))
         self.connect((self.low_pass_filter_0, 0), (self.analog_simple_squelch_cc_1, 0))
         self.connect((self.low_pass_filter_0_0, 0), (self.analog_am_demod_cf_0, 0))
+        self.connect((self.low_pass_filter_0_0_0, 0), (self.blocks_selector_0, 0))
         self.connect((self.low_pass_filter_0_1, 0), (self.analog_simple_squelch_cc_2, 0))
-        self.connect((self.rtlsdr_source_0, 0), (self.blocks_selector_0, 0))
+        self.connect((self.rtlsdr_source_0, 0), (self.blocks_multiply_xx_1, 0))
         self.connect((self.rtlsdr_source_0, 0), (self.blocks_stream_to_vector_0, 0))
         self.connect((self.rtlsdr_source_0, 0), (self.blocks_stream_to_vector_0_0, 0))
         self.connect((self.rtlsdr_source_0, 0), (self.qtgui_freq_sink_x_0, 0))
@@ -288,6 +306,28 @@ class top_block(gr.top_block, Qt.QWidget):
         self.settings = Qt.QSettings("GNU Radio", "top_block")
         self.settings.setValue("geometry", self.saveGeometry())
         event.accept()
+
+    def get_target_freq(self):
+        return self.target_freq
+
+    def set_target_freq(self, target_freq):
+        self.target_freq = target_freq
+        self.set_offset_freq(self.target_freq-self.sdr_freq)
+
+    def get_sdr_freq(self):
+        return self.sdr_freq
+
+    def set_sdr_freq(self, sdr_freq):
+        self.sdr_freq = sdr_freq
+        self.set_offset_freq(self.target_freq-self.sdr_freq)
+        self.qtgui_freq_sink_x_0.set_frequency_range(self.sdr_freq, self.sdr_samp_rate)
+        self.rtlsdr_source_0.set_center_freq(self.sdr_freq, 0)
+
+    def get_syn_mode(self):
+        return self.syn_mode
+
+    def set_syn_mode(self, syn_mode):
+        self.syn_mode = syn_mode
 
     def get_squelch(self):
         return self.squelch
@@ -304,11 +344,14 @@ class top_block(gr.top_block, Qt.QWidget):
 
     def set_sdr_samp_rate(self, sdr_samp_rate):
         self.sdr_samp_rate = sdr_samp_rate
-        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate, 200, 2800, 1000, firdes.WIN_HAMMING, 6.76))
-        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate, -2800, 200, 1000, firdes.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate, 7500, 5000, firdes.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/25, 5000, 5000, firdes.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, self.sdr_samp_rate, 75000, 25000, firdes.WIN_HAMMING, 6.76))
+        self.analog_sig_source_x_1.set_sampling_freq(self.sdr_samp_rate)
+        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, 200, 2800, 1000, firdes.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, -2800, -200, 1000, firdes.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, 7500, 5000, firdes.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, 5000, 5000, firdes.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate, self.receive_width, 5000, firdes.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, 75000, 25000, firdes.WIN_HAMMING, 6.76))
+        self.qtgui_freq_sink_x_0.set_frequency_range(self.sdr_freq, self.sdr_samp_rate)
         self.rtlsdr_source_0.set_sample_rate(self.sdr_samp_rate)
 
     def get_samp_rate(self):
@@ -316,13 +359,26 @@ class top_block(gr.top_block, Qt.QWidget):
 
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
-        self.qtgui_freq_sink_x_0.set_frequency_range(self.freq, self.samp_rate)
+
+    def get_receive_width(self):
+        return self.receive_width
+
+    def set_receive_width(self, receive_width):
+        self.receive_width = receive_width
+        self.low_pass_filter_0_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate, self.receive_width, 5000, firdes.WIN_HAMMING, 6.76))
 
     def get_offset_frequence(self):
         return self.offset_frequence
 
     def set_offset_frequence(self, offset_frequence):
         self.offset_frequence = offset_frequence
+
+    def get_offset_freq(self):
+        return self.offset_freq
+
+    def set_offset_freq(self, offset_freq):
+        self.offset_freq = offset_freq
+        self.analog_sig_source_x_1.set_frequency(-self.offset_freq)
 
     def get_gain_rf(self):
         return self.gain_rf
@@ -344,14 +400,6 @@ class top_block(gr.top_block, Qt.QWidget):
     def set_gain_bb(self, gain_bb):
         self.gain_bb = gain_bb
         self.rtlsdr_source_0.set_bb_gain(self.gain_bb, 0)
-
-    def get_freq(self):
-        return self.freq
-
-    def set_freq(self, freq):
-        self.freq = freq
-        self.qtgui_freq_sink_x_0.set_frequency_range(self.freq, self.samp_rate)
-        self.rtlsdr_source_0.set_center_freq(self.freq, 0)
 
     def get_demod_mode(self):
         return self.demod_mode
