@@ -275,9 +275,21 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         else:
             self.safe_set_target_freq(self.target_freq_hz + step_hz)
 
-    def on_line_dropped(self):
-        """自由调谐下：红线停止拖拽"""
+    def on_line_dragged(self):
+        """自由调谐下：拖拽红线时实时更新阴影和顶部频率文本"""
         if self.tuning_mode == "FREE":
+            self.is_dragging = True
+            target_freq_mhz = self.ui.center_line.value()
+            
+            # 实时更新滤波器阴影位置
+            self.update_filter_region(target_freq_mhz)
+            # 实时更新左上角的主频率标签
+            self.ui.freq_label.setText(f"当前频率: {target_freq_mhz:.3f} MHz")
+
+    def on_line_dropped(self):
+        """自由调谐下：红线停止拖拽，真正下发调谐指令"""
+        if self.tuning_mode == "FREE":
+            self.is_dragging = False
             target_hz = self.ui.center_line.value() * 1e6
             self.safe_set_target_freq(target_hz)
 
@@ -293,8 +305,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
     def sync_status(self):
         """1s 同步，不应影响 UI 跟手度"""
         try:
-            # 仅在未操作时同步
-            if not self.updating_view and self.drag_tune_timer.remainingTime() <= 0:
+            # 仅在未操作时同步 (增加了 not self.is_dragging 防止红线拖拽时数据打架闪烁)
+            if not self.updating_view and self.drag_tune_timer.remainingTime() <= 0 and not getattr(self, 'is_dragging', False):
                 sdr_f = self.backend.get_sdr_freq()
                 tar_f = self.backend.get_target_freq()
                 
@@ -308,7 +320,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                     self.safe_set_sdr_and_target_freq(self.sdr_freq_hz)
 
                 self.ui.freq_label.setText(f"当前频率: {(self.target_freq_hz / 1e6):.3f} MHz")
-        except Exception: pass 
+        except Exception: pass
 
     def update_plot(self):
         """核心绘图循环 (频谱 X 轴始终跟随 SDR 硬件中心频率)"""
