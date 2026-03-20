@@ -119,18 +119,19 @@ class Ui_MainWindow:
         self.plot_widget.setMenuEnabled(False)
 
         # 滤波器通带的阴影指示区域 (先 add 到图层，使其在曲线下方)
-        self.filter_region = pg.LinearRegionItem(values=[0, 0], movable=False, 
-                                                 brush=pg.mkBrush(0, 120, 215, 40), 
-                                                 pen=pg.mkPen(None))
+        pen_null = pg.mkPen(color=(0,0,0,0)) # 无边框
+        brush_shadow = pg.mkBrush(color=(255, 23, 68, 40)) # 亮红色，低不透明度 (40) 用于阴影
+        self.filter_region = pg.LinearRegionItem([0, 0], pg.LinearRegionItem.Vertical, movable=False, pen=pen_null, brush=brush_shadow)
         self.plot_widget.addItem(self.filter_region)
 
         # 频谱曲线
         self.curve = self.plot_widget.plot(pen=pg.mkPen(color='#0078D7', width=2))
         
         # 中心频率红线 (最后 add，使其在最上层，方便触摸拖动)
-        self.center_line = pg.InfiniteLine(pos=0, movable=True, pen=pg.mkPen('#E81123', width=3))
-        self.line_label = pg.InfLineLabel(self.center_line, text="Freq", position=0.85, color='#E81123', fill='#F5F5F5')
+        pen_red_line = pg.mkPen(color='#FF1744', width=1.5)
+        self.center_line = pg.InfiniteLine(angle=90, movable=False, pen=pen_red_line)
         self.plot_widget.addItem(self.center_line)
+      
         
         self.splitter.addWidget(self.plot_widget)
 
