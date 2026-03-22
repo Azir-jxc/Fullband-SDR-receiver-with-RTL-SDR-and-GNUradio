@@ -36,12 +36,24 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '3'
+    value: '0'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
     coordinate: [2414, 396]
+    rotation: 0
+    state: true
+- name: dev_args
+  id: variable
+  parameters:
+    comment: ''
+    value: '''rtl=0,direct_samp=0'''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [271, 511]
     rotation: 0
     state: true
 - name: gain_bb
@@ -92,18 +104,6 @@ blocks:
     coordinate: [998, 588]
     rotation: 0
     state: true
-- name: offset_frequence
-  id: variable
-  parameters:
-    comment: ''
-    value: '0'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [271, 515]
-    rotation: 0
-    state: true
 - name: receive_width
   id: variable
   parameters:
@@ -137,10 +137,10 @@ blocks:
     min_len: '200'
     orient: Qt.Vertical
     rangeType: float
-    start: 8e6
+    start: 28e6
     step: 100e3
-    stop: 500e6
-    value: 124.4e6
+    stop: 1.7e9
+    value: 28e6
     widget: counter_slider
   states:
     bus_sink: false
@@ -189,12 +189,12 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: 124.5e6
+    value: 28e6
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [857, 591]
+    coordinate: [440, 504]
     rotation: 0
     state: true
 - name: analog_agc_xx_0
@@ -1045,7 +1045,7 @@ blocks:
     ant7: ''
     ant8: ''
     ant9: ''
-    args: ''
+    args: dev_args
     bb_gain0: gain_bb
     bb_gain1: '20'
     bb_gain10: '20'

@@ -3,9 +3,70 @@ from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 from config import *
 
+class ConfigDialog(QtWidgets.QDialog):
+    """独立的弹窗配置窗口"""
+    def __init__(self, parent=None, cur_rf=20, cur_if=20, cur_bb=20, cur_sr="2.4", cur_mode="正交采样 (Quadrature)"):
+        super().__init__(parent)
+        self.setWindowTitle("前端参数配置")
+        self.setMinimumWidth(350)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool) # 设为工具窗口，浮动在上方
+        
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(15)
+
+        # --- 1. 采样率配置 ---
+        sr_layout = QtWidgets.QHBoxLayout()
+        sr_layout.addWidget(QtWidgets.QLabel("采样率 (MHz):"))
+        self.sr_combo = QtWidgets.QComboBox()
+        self.sr_combo.addItems(["1.024", "1.28", "2.048", "2.4", "2.56", "2.8", "3.2"])
+        self.sr_combo.setCurrentText(cur_sr)
+        sr_layout.addWidget(self.sr_combo)
+        layout.addLayout(sr_layout)
+
+        # --- 2. 采样模式配置 ---
+        mode_layout = QtWidgets.QHBoxLayout()
+        mode_layout.addWidget(QtWidgets.QLabel("采样模式:"))
+        self.mode_combo = QtWidgets.QComboBox()
+        self.mode_combo.addItems(["正交采样 (Quadrature)", "I 通道直采 (Direct I)", "Q 通道直采 (Direct Q)"])
+        self.mode_combo.setCurrentText(cur_mode)
+        mode_layout.addWidget(self.mode_combo)
+        layout.addLayout(mode_layout)
+
+        # 分割线
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+        layout.addWidget(line)
+
+        # --- 3. 增益配置 ---
+        self.rf_slider, self.rf_label = self.create_slider("RF 增益", cur_rf, layout)
+        self.if_slider, self.if_label = self.create_slider("IF 增益", cur_if, layout)
+        self.bb_slider, self.bb_label = self.create_slider("BB 增益", cur_bb, layout)
+
+        # --- 4. 底部按钮 ---
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.apply_btn = QtWidgets.QPushButton("应用重启硬件流")
+        self.apply_btn.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; padding: 5px;")
+        self.close_btn = QtWidgets.QPushButton("关闭")
+        btn_layout.addWidget(self.apply_btn)
+        btn_layout.addWidget(self.close_btn)
+        layout.addLayout(btn_layout)
+
+    def create_slider(self, name, default_val, parent_layout):
+        vbox = QtWidgets.QVBoxLayout()
+        label = QtWidgets.QLabel(f"{name}: {default_val} dB")
+        slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        slider.setRange(0, 50)
+        slider.setValue(default_val)
+        slider.valueChanged.connect(lambda v, l=label, n=name: l.setText(f"{n}: {v} dB"))
+        vbox.addWidget(label)
+        vbox.addWidget(slider)
+        parent_layout.addLayout(vbox)
+        return slider, label
+
+
 class Ui_MainWindow:
     def setup_ui(self, window):
-        """将所有的 UI 控件组装到传入的 window (主窗口) 上"""
         window.setWindowTitle("SDR 触摸屏接收机 UI")
         window.resize(800, 480)
 
@@ -17,7 +78,6 @@ class Ui_MainWindow:
         freq_layout = QtWidgets.QHBoxLayout()
         freq_layout.setSpacing(15)
         
-        # 统一使用 self.xxx，以便 main.py 中通过 self.ui.xxx 访问
         self.freq_label = QtWidgets.QLabel("当前频率: 连接中...")
         self.freq_label.setMinimumWidth(200)
         self.freq_input = QtWidgets.QLineEdit()
@@ -31,38 +91,30 @@ class Ui_MainWindow:
         freq_layout.addWidget(self.set_freq_btn)
         freq_layout.addStretch()
 
-        # --- 第二行：循环平均按键 + 模式选择 + 增益开关 + 调频旋钮 ---
+        # --- 第二行：控制按键 ---
         ctrl_layout = QtWidgets.QHBoxLayout()
         ctrl_layout.setSpacing(15)
 
-        # 平均长度切换按钮
         self.avg_cycle_btn = QtWidgets.QPushButton() 
         self.avg_cycle_btn.setMinimumSize(120, 40)
         ctrl_layout.addWidget(self.avg_cycle_btn)
 
-        # 解调模式选择下拉框
         self.mode_combo = QtWidgets.QComboBox()
         self.mode_combo.addItems(list(DEMOD_MODES.keys()))
         self.mode_combo.setMinimumSize(100, 40)
         ctrl_layout.addWidget(self.mode_combo)
 
-        # ++ 新增：调谐模式切换按钮 ++
         self.tuning_mode_btn = QtWidgets.QPushButton("模式: 中央调谐")
         self.tuning_mode_btn.setMinimumSize(120, 40)
         ctrl_layout.addWidget(self.tuning_mode_btn)
 
-      
-        # 新增：增益控制展开按钮
-        self.gain_toggle_btn = QtWidgets.QPushButton("增益设置 ▼")
-        self.gain_toggle_btn.setMinimumSize(100, 40)
-        self.gain_toggle_btn.setCheckable(True) # 设置为可按下的状态
-        ctrl_layout.addWidget(self.gain_toggle_btn)
+        # 前端配置弹窗按钮
+        self.config_btn = QtWidgets.QPushButton("前端配置 ⚙️")
+        self.config_btn.setMinimumSize(100, 40)
+        ctrl_layout.addWidget(self.config_btn)
 
         ctrl_layout.addStretch() 
 
-    
-
-        # 调频旋钮
         dial_label = QtWidgets.QLabel("Freq")
         dial_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         ctrl_layout.addWidget(dial_label)
@@ -77,65 +129,31 @@ class Ui_MainWindow:
         layout.addLayout(freq_layout)
         layout.addLayout(ctrl_layout)
 
-        # --- 新增：隐藏的增益控制面板 ---
-        self.gain_panel = QtWidgets.QWidget()
-        gain_layout = QtWidgets.QHBoxLayout(self.gain_panel)
-        gain_layout.setContentsMargins(10, 0, 10, 10) # 紧凑的边距
-        
-        # 辅助函数：快速创建带标签的增益滑块
-        def create_gain_slider(name):
-            vbox = QtWidgets.QVBoxLayout()
-            label = QtWidgets.QLabel(f"{name}: 20 dB")
-            label.setAlignment(QtCore.Qt.AlignCenter)
-            slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-            slider.setRange(0, 50)      # RTL-SDR 典型增益范围
-            slider.setValue(20)         # 默认值
-            slider.setMinimumHeight(40) # 增加高度方便触摸屏拖动
-            
-            vbox.addWidget(label)
-            vbox.addWidget(slider)
-            gain_layout.addLayout(vbox)
-            return slider, label
-
-        # 实例化三个增益滑块及标签
-        self.rf_slider, self.rf_label = create_gain_slider("RF")
-        self.if_slider, self.if_label = create_gain_slider("IF")
-        self.bb_slider, self.bb_label = create_gain_slider("BB")
-        
-        self.gain_panel.setVisible(False) # 默认隐藏
-        layout.addWidget(self.gain_panel) # 插入到控制栏和绘图区之间
-
-        # --- 绘图区：使用 QSplitter 分割上下画面 ---
+        # --- 绘图区 ---
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         layout.addWidget(self.splitter)
 
-        # 1. 频谱图 (上半部分)
+        # 1. 频谱图
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setTitle("实时 FFT 功率谱", color='#333333', size='12pt')
         self.plot_widget.setLabel('left', 'Power', units='dB')
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
         self.plot_widget.setYRange(-100, 10)
-        self.plot_widget.setMouseEnabled(x=False, y=False)
         self.plot_widget.setMenuEnabled(False)
 
-        # 滤波器通带的阴影指示区域 (先 add 到图层，使其在曲线下方)
-        pen_null = pg.mkPen(color=(0,0,0,0)) # 无边框
-        brush_shadow = pg.mkBrush(color=(255, 23, 68, 40)) # 亮红色，低不透明度 (40) 用于阴影
-        self.filter_region = pg.LinearRegionItem([0, 0], pg.LinearRegionItem.Vertical, movable=False, pen=pen_null, brush=brush_shadow)
-        self.plot_widget.addItem(self.filter_region)
-
-        # 频谱曲线
-        self.curve = self.plot_widget.plot(pen=pg.mkPen(color='#0078D7', width=2))
-        
-        # 中心频率红线 (最后 add，使其在最上层，方便触摸拖动)
         pen_red_line = pg.mkPen(color='#FF1744', width=1.5)
         self.center_line = pg.InfiniteLine(angle=90, movable=False, pen=pen_red_line)
         self.plot_widget.addItem(self.center_line)
-      
-        
+
+        pen_null = pg.mkPen(color=(0,0,0,0)) 
+        brush_shadow = pg.mkBrush(color=(255, 23, 68, 40)) 
+        self.filter_region = pg.LinearRegionItem([0, 0], pg.LinearRegionItem.Vertical, movable=False, pen=pen_null, brush=brush_shadow)
+        self.plot_widget.addItem(self.filter_region)
+
+        self.curve = self.plot_widget.plot(pen=pg.mkPen(color='#0078D7', width=2))
         self.splitter.addWidget(self.plot_widget)
 
-        # 2. 瀑布图 (下半部分)
+        # 2. 瀑布图
         self.waterfall_widget = pg.PlotWidget()
         self.waterfall_widget.setLabel('bottom', 'Absolute Frequency', units='MHz')
         self.waterfall_widget.setLabel('left', 'Time')
@@ -145,12 +163,9 @@ class Ui_MainWindow:
         self.waterfall_image = pg.ImageItem()
         self.waterfall_widget.addItem(self.waterfall_image)
         
-        # 加载内置的伪彩映射 (Colormap)
         colormap = pg.colormap.get('viridis')
         self.waterfall_image.setLookupTable(colormap.getLookupTable())
         self.waterfall_image.setLevels([-100, 0]) 
         
         self.splitter.addWidget(self.waterfall_widget)
-        
-        # 初始高度比例 1:1
         self.splitter.setSizes([200, 200])
