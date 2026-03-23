@@ -86,18 +86,25 @@ class top_block(gr.top_block, Qt.QWidget):
         ##################################################
         self.target_freq = target_freq = 28e6
         self.sdr_freq = sdr_freq = 28e6
+        self.wfm_co_freq = wfm_co_freq = 7.5e4
+        self.usb_co_freq_low = usb_co_freq_low = 0.2e3
+        self.usb_co_freq_high = usb_co_freq_high = 2.8e3
         self.syn_mode = syn_mode = 0
         self.squelch = squelch = -70
         self.sdr_samp_rate = sdr_samp_rate = 2.4e6
         self.samp_rate = samp_rate = 48000
         self.receive_width = receive_width = 100e3
         self.offset_freq = offset_freq = target_freq-sdr_freq
+        self.nfm_co_freq = nfm_co_freq = 7.5e3
+        self.lsb_co_freq_low = lsb_co_freq_low = -2.8e3
+        self.lsb_co_freq_high = lsb_co_freq_high = -0.2e3
         self.gain_rf = gain_rf = 20
         self.gain_if = gain_if = 20
         self.gain_bb = gain_bb = 20
         self.dev_args = dev_args = 'rtl=0,direct_samp=0'
         self.demod_mode = demod_mode = 0
-        self.audio_value = audio_value = -70
+        self.audio_value = audio_value = 0.4
+        self.am_co_freq = am_co_freq = 5e3
 
         ##################################################
         # Blocks
@@ -176,7 +183,7 @@ class top_block(gr.top_block, Qt.QWidget):
             firdes.low_pass(
                 1,
                 sdr_samp_rate/10,
-                75000,
+                wfm_co_freq,
                 25000,
                 firdes.WIN_HAMMING,
                 6.76))
@@ -194,7 +201,7 @@ class top_block(gr.top_block, Qt.QWidget):
             firdes.low_pass(
                 1,
                 sdr_samp_rate/10,
-                5000,
+                am_co_freq,
                 5000,
                 firdes.WIN_HAMMING,
                 6.76))
@@ -203,7 +210,7 @@ class top_block(gr.top_block, Qt.QWidget):
             firdes.low_pass(
                 1,
                 sdr_samp_rate/10,
-                7500,
+                nfm_co_freq,
                 5000,
                 firdes.WIN_HAMMING,
                 6.76))
@@ -222,8 +229,8 @@ class top_block(gr.top_block, Qt.QWidget):
             firdes.complex_band_pass(
                 1,
                 sdr_samp_rate/10,
-                -2800,
-                -200,
+                lsb_co_freq_low,
+                lsb_co_freq_high,
                 1000,
                 firdes.WIN_HAMMING,
                 6.76))
@@ -232,8 +239,8 @@ class top_block(gr.top_block, Qt.QWidget):
             firdes.complex_band_pass(
                 1,
                 sdr_samp_rate/10,
-                200,
-                2800,
+                usb_co_freq_low,
+                usb_co_freq_high,
                 1000,
                 firdes.WIN_HAMMING,
                 6.76))
@@ -259,7 +266,7 @@ class top_block(gr.top_block, Qt.QWidget):
         	audio_pass=5000,
         	audio_stop=5500,
         )
-        self.analog_agc_xx_0_0_0 = analog.agc_ff(1e-3, 0.4, 1.0)
+        self.analog_agc_xx_0_0_0 = analog.agc_ff(1e-3, audio_value, 1.0)
         self.analog_agc_xx_0_0_0.set_max_gain(65536)
 
 
@@ -321,6 +328,27 @@ class top_block(gr.top_block, Qt.QWidget):
         self.qtgui_freq_sink_x_0.set_frequency_range(self.sdr_freq, self.sdr_samp_rate)
         self.rtlsdr_source_0.set_center_freq(self.sdr_freq, 0)
 
+    def get_wfm_co_freq(self):
+        return self.wfm_co_freq
+
+    def set_wfm_co_freq(self, wfm_co_freq):
+        self.wfm_co_freq = wfm_co_freq
+        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, self.wfm_co_freq, 25000, firdes.WIN_HAMMING, 6.76))
+
+    def get_usb_co_freq_low(self):
+        return self.usb_co_freq_low
+
+    def set_usb_co_freq_low(self, usb_co_freq_low):
+        self.usb_co_freq_low = usb_co_freq_low
+        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, self.usb_co_freq_low, self.usb_co_freq_high, 1000, firdes.WIN_HAMMING, 6.76))
+
+    def get_usb_co_freq_high(self):
+        return self.usb_co_freq_high
+
+    def set_usb_co_freq_high(self, usb_co_freq_high):
+        self.usb_co_freq_high = usb_co_freq_high
+        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, self.usb_co_freq_low, self.usb_co_freq_high, 1000, firdes.WIN_HAMMING, 6.76))
+
     def get_syn_mode(self):
         return self.syn_mode
 
@@ -343,12 +371,12 @@ class top_block(gr.top_block, Qt.QWidget):
     def set_sdr_samp_rate(self, sdr_samp_rate):
         self.sdr_samp_rate = sdr_samp_rate
         self.analog_sig_source_x_1.set_sampling_freq(self.sdr_samp_rate)
-        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, 200, 2800, 1000, firdes.WIN_HAMMING, 6.76))
-        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, -2800, -200, 1000, firdes.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, 7500, 5000, firdes.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, 5000, 5000, firdes.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, self.usb_co_freq_low, self.usb_co_freq_high, 1000, firdes.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, self.lsb_co_freq_low, self.lsb_co_freq_high, 1000, firdes.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, self.nfm_co_freq, 5000, firdes.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, self.am_co_freq, 5000, firdes.WIN_HAMMING, 6.76))
         self.low_pass_filter_0_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate, self.receive_width, 5000, firdes.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, 75000, 25000, firdes.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, self.wfm_co_freq, 25000, firdes.WIN_HAMMING, 6.76))
         self.qtgui_freq_sink_x_0.set_frequency_range(self.sdr_freq, self.sdr_samp_rate)
         self.rtlsdr_source_0.set_sample_rate(self.sdr_samp_rate)
 
@@ -371,6 +399,27 @@ class top_block(gr.top_block, Qt.QWidget):
     def set_offset_freq(self, offset_freq):
         self.offset_freq = offset_freq
         self.analog_sig_source_x_1.set_frequency(-self.offset_freq)
+
+    def get_nfm_co_freq(self):
+        return self.nfm_co_freq
+
+    def set_nfm_co_freq(self, nfm_co_freq):
+        self.nfm_co_freq = nfm_co_freq
+        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, self.nfm_co_freq, 5000, firdes.WIN_HAMMING, 6.76))
+
+    def get_lsb_co_freq_low(self):
+        return self.lsb_co_freq_low
+
+    def set_lsb_co_freq_low(self, lsb_co_freq_low):
+        self.lsb_co_freq_low = lsb_co_freq_low
+        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, self.lsb_co_freq_low, self.lsb_co_freq_high, 1000, firdes.WIN_HAMMING, 6.76))
+
+    def get_lsb_co_freq_high(self):
+        return self.lsb_co_freq_high
+
+    def set_lsb_co_freq_high(self, lsb_co_freq_high):
+        self.lsb_co_freq_high = lsb_co_freq_high
+        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, self.sdr_samp_rate/10, self.lsb_co_freq_low, self.lsb_co_freq_high, 1000, firdes.WIN_HAMMING, 6.76))
 
     def get_gain_rf(self):
         return self.gain_rf
@@ -412,6 +461,14 @@ class top_block(gr.top_block, Qt.QWidget):
 
     def set_audio_value(self, audio_value):
         self.audio_value = audio_value
+        self.analog_agc_xx_0_0_0.set_reference(self.audio_value)
+
+    def get_am_co_freq(self):
+        return self.am_co_freq
+
+    def set_am_co_freq(self, am_co_freq):
+        self.am_co_freq = am_co_freq
+        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate/10, self.am_co_freq, 5000, firdes.WIN_HAMMING, 6.76))
 
 
 

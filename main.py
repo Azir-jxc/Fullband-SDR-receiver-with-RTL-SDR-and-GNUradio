@@ -26,8 +26,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.target_freq_hz = 0.0    
         
         # --- 渲染控制锁 ---
-        self.updating_view = False       # 防止视图更新造成死循环
-        self.pause_plot_update = False   # 拖拽时冻结画面，防止闪烁
+        self.updating_view = False       
+        self.pause_plot_update = False   
         
         # --- 前端配置状态缓存 ---
         self.cur_rf_gain = 20
@@ -37,22 +37,21 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.cur_samp_mode = "正交采样 (Quadrature)"
         self.config_dialog = None 
 
+        # --- 解调与AGC状态缓存 ---
+        self.demod_dialog = None
+        self.cur_demod_mode = "WFM"  # 记住当前模式
+        self.cur_squelch = -70
+        self.cur_audio_value = 0.4   # 默认音量
+
         # --- 数据与内存初始化 ---
         self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/SAMPLE_RATE)) / 1e6
         
-        # 1. 恢复矩阵形状，用 -100 填充深蓝色背景
         self.waterfall_data = np.full((WATERFALL_ROWS, FFT_SIZE), -100.0)
-
-        # 2. 核心修复：在设定坐标系前，先塞入空数据占位，避免 PyQtGraph 忽略初始坐标
         self.ui.waterfall_image.setImage(np.ascontiguousarray(self.waterfall_data.T), autoLevels=False)
-
-        # 3. 强制锁定 Y 轴视图范围 (0~ROWS)，防止量程暴走到 10000
         self.ui.waterfall_widget.setYRange(0, WATERFALL_ROWS, padding=0)
 
-        # --- 初始化硬件频率并对齐 UI ---
         self.initialize_hardware_state()
 
-        # --- 定时器配置 ---
         self.drag_tune_timer = QtCore.QTimer()
         self.drag_tune_timer.setSingleShot(True)
         self.drag_tune_timer.timeout.connect(self.apply_dragged_freq)
@@ -66,23 +65,20 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.last_dial_value = self.ui.freq_dial.value()
 
-        # --- 绑定事件与启动绘图 ---
         self.bind_events()
         
-        # 默认 UI 状态
         self.ui.plot_widget.setMouseEnabled(x=True, y=False)
         self.ui.center_line.setMovable(False)
 
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.update_plot)
-        self.plot_timer.start(100) # 10FPS 绘图
+        self.plot_timer.start(100) 
 
         self.sync_timer = QtCore.QTimer()
         self.sync_timer.timeout.connect(self.sync_status)
-        self.sync_timer.start(1000) # 1s 状态同步 
+        self.sync_timer.start(1000) 
 
     def update_waterfall_rect(self):
-        """精准映射坐标轴，确保底图宽度始终等于 SDR 绝对采样带宽"""
         mhz = self.sdr_freq_hz / 1e6
         sr_mhz = self.cur_sr_mhz
         min_f = mhz - (sr_mhz / 2.0)
@@ -90,7 +86,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.waterfall_image.setRect(rect)
 
     def initialize_hardware_state(self):
-        """启动时强制对齐硬件频率与 UI 坐标系"""
         try:
             self.sdr_freq_hz = self.backend.get_sdr_freq()
             self.target_freq_hz = self.backend.get_target_freq()
@@ -123,14 +118,58 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.center_line.sigDragged.connect(self.on_line_dragged)
         self.ui.center_line.sigPositionChangeFinished.connect(self.on_line_dropped)
         
-        self.ui.mode_combo.currentIndexChanged.connect(self.on_mode_changed)
         self.ui.tuning_mode_btn.clicked.connect(self.toggle_tuning_mode)
         self.ui.config_btn.clicked.connect(self.open_config_dialog)
+        self.ui.demod_config_btn.clicked.connect(self.open_demod_config_dialog)
         
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
 
-    # ================= 前端弹窗与参数配置 =================
+    # ================= 前端与解调弹窗配置 =================
+    def open_demod_config_dialog(self):
+        if self.demod_dialog is None:
+            from ui_layout import DemodConfigDialog
+            _, cur_low, cur_high = DEMOD_MODES[self.cur_demod_mode]
+
+            self.demod_dialog = DemodConfigDialog(
+                self, self.cur_demod_mode, cur_low, cur_high, self.cur_squelch, self.cur_audio_value
+            )
+            self.demod_dialog.apply_btn.clicked.connect(self.apply_demod_config)
+            self.demod_dialog.close_btn.clicked.connect(self.demod_dialog.hide)
+            
+        self.demod_dialog.mode_combo.setCurrentText(self.cur_demod_mode)
+        self.demod_dialog.show()
+        self.demod_dialog.raise_()
+
+    def apply_demod_config(self):
+        if not self.demod_dialog: return
+        
+        new_mode = self.demod_dialog.mode_combo.currentText()
+        new_low = self.demod_dialog.low_spin.value()
+        new_high = self.demod_dialog.high_spin.value()
+        self.cur_squelch = self.demod_dialog.squelch_spin.value()
+        
+        # 处理滑块音量映射 
+        slider_val = self.demod_dialog.audio_slider.value()
+        self.cur_audio_value = 0.0 if slider_val == 0 else slider_val / 10.0
+        
+        idx = DEMOD_MODES[new_mode][0]
+        DEMOD_MODES[new_mode] = (idx, new_low, new_high)
+        
+        # 模式切换检查
+        if self.cur_demod_mode != new_mode:
+            self.cur_demod_mode = new_mode
+            self.backend.set_demod_mode(idx)
+            
+        self.update_filter_region()
+
+        # 下发所有参数
+        self.backend.set_squelch(self.cur_squelch)
+        self.backend.set_audio_value(self.cur_audio_value)
+        self.backend.set_filter_bw(new_mode, new_low, new_high)
+
+        self.demod_dialog.hide()
+
     def open_config_dialog(self):
         if self.config_dialog is None:
             from ui_layout import ConfigDialog
@@ -138,11 +177,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 self, self.cur_rf_gain, self.cur_if_gain, self.cur_bb_gain,
                 str(self.cur_sr_mhz), self.cur_samp_mode
             )
-            
             self.config_dialog.rf_slider.valueChanged.connect(self.on_rf_changed)
             self.config_dialog.if_slider.valueChanged.connect(self.on_if_changed)
             self.config_dialog.bb_slider.valueChanged.connect(self.on_bb_changed)
-            
             self.config_dialog.apply_btn.clicked.connect(self.apply_hardware_config)
             self.config_dialog.close_btn.clicked.connect(self.config_dialog.hide)
             
@@ -158,7 +195,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
     def apply_hardware_config(self):
         if not self.config_dialog: return
-        
         new_sr_str = self.config_dialog.sr_combo.currentText()
         new_mode_str = self.config_dialog.mode_combo.currentText()
         new_sr_mhz = float(new_sr_str)
@@ -178,17 +214,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.config_dialog.hide()
 
     # ================= 业务逻辑与交互 =================
-    def on_mode_changed(self):
-        mode_name = self.ui.mode_combo.currentText()
-        mode_index = DEMOD_MODES[mode_name][0]
-        try: self.backend.set_demod_mode(mode_index)
-        except Exception: pass
-        self.update_filter_region()
-
     def update_filter_region(self, center_freq_mhz=None):
         if center_freq_mhz is None: center_freq_mhz = self.ui.center_line.value()
-        mode_name = self.ui.mode_combo.currentText()
-        _, low_hz, high_hz = DEMOD_MODES[mode_name]
+        _, low_hz, high_hz = DEMOD_MODES[self.cur_demod_mode]
         self.ui.filter_region.setRegion([center_freq_mhz + (low_hz / 1e6), center_freq_mhz + (high_hz / 1e6)])
 
     def cycle_averaging(self):
@@ -220,9 +248,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 self.safe_set_target_freq(clicked_freq_hz)
 
     def on_xrange_changed(self, view_box, view_range):
-        """中央调谐：拖拽频谱背景时触发"""
         if self.tuning_mode == "CENTRAL" and not self.updating_view:
-            # 1. 立即冻结画面渲染，方便用户瞄准信号
             self.pause_plot_update = True 
             
             new_center_mhz = (view_range[0] + view_range[1]) / 2.0
@@ -240,23 +266,18 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.update_waterfall_rect() 
             self.updating_view = False
             
-            # 启动防抖，推迟发送网络请求
             self.pending_sdr_freq_hz = target_hz
             self.drag_tune_timer.start(50) 
 
     def apply_dragged_freq(self):
-        """防抖结束后：下发指令，并计划恢复画面"""
         if self.pending_sdr_freq_hz:
             self.backend.set_sdr_freq(self.pending_sdr_freq_hz)
             self.backend.set_target_freq(self.pending_sdr_freq_hz)
-            
-        # 延迟 200ms 等待底层硬件频率锁定，然后恢复画面渲染
         QtCore.QTimer.singleShot(200, self.resume_plot)
 
     def resume_plot(self):
-        """解除画面冻结"""
         self.pause_plot_update = False
-        self.averaged_power_db = None  # 清除平滑历史，防止残影
+        self.averaged_power_db = None  
 
     def safe_set_sdr_and_target_freq(self, target_hz):
         clamped_hz = max(MIN_FREQ_HZ, min(MAX_FREQ_HZ, target_hz))
@@ -343,12 +364,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         except Exception: pass 
 
     def update_plot(self):
-        # 始终抽取数据以清空 ZMQ 缓冲区
         latest_fft = self.backend.get_latest_fft() 
-        
-        # 如果画面被冻结（例如正在拖动瞄准信号），直接返回不渲染
-        if self.pause_plot_update:
-            return
+        if self.pause_plot_update: return
 
         if latest_fft is not None:
             power_db = 20 * np.log10(np.abs(latest_fft) / FFT_SIZE + 1e-12) + CALIBRATION_OFFSET
@@ -359,11 +376,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             current_x = self.base_freqs + (self.sdr_freq_hz / 1e6)
             self.ui.curve.setData(current_x, self.averaged_power_db)
             
-            # 滚动矩阵 (最新数据存在底部)
             self.waterfall_data = np.roll(self.waterfall_data, -1, axis=0)
             self.waterfall_data[-1, :] = self.averaged_power_db
             
-            # 重组为连续内存，防止出现满屏横线花屏
             render_data = np.ascontiguousarray(self.waterfall_data.T)
             self.ui.waterfall_image.setImage(render_data, autoLevels=False)
 
@@ -375,7 +390,6 @@ if __name__ == '__main__':
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app = QtWidgets.QApplication(sys.argv)
     
-    # 全局字体设置，适应触摸屏
     font = app.font()
     font.setPointSize(12)
     app.setFont(font)
