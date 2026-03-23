@@ -45,7 +45,7 @@ class ConfigDialog(QtWidgets.QDialog):
 
         # --- 4. 底部按钮 ---
         btn_layout = QtWidgets.QHBoxLayout()
-        self.apply_btn = QtWidgets.QPushButton("应用重启硬件流")
+        self.apply_btn = QtWidgets.QPushButton("应用重启")
         self.apply_btn.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; padding: 5px;")
         self.close_btn = QtWidgets.QPushButton("关闭")
         btn_layout.addWidget(self.apply_btn)

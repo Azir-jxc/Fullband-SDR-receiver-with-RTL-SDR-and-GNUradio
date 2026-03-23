@@ -8,6 +8,7 @@ from config import *
 from radio_backend import RadioBackend
 from ui_layout import Ui_MainWindow
 
+# 全局明亮主题设置
 pg.setConfigOption('background', '#F5F5F5')
 pg.setConfigOption('foreground', '#333333')
 
@@ -19,11 +20,16 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.setup_ui(self)
         self.backend = RadioBackend()
         
+        # --- 核心状态变量 ---
         self.tuning_mode = "CENTRAL" 
         self.sdr_freq_hz = 0.0       
         self.target_freq_hz = 0.0    
-        self.updating_view = False   
         
+        # --- 渲染控制锁 ---
+        self.updating_view = False       # 防止视图更新造成死循环
+        self.pause_plot_update = False   # 拖拽时冻结画面，防止闪烁
+        
+        # --- 前端配置状态缓存 ---
         self.cur_rf_gain = 20
         self.cur_if_gain = 20
         self.cur_bb_gain = 20
@@ -31,18 +37,22 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.cur_samp_mode = "正交采样 (Quadrature)"
         self.config_dialog = None 
 
+        # --- 数据与内存初始化 ---
         self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/SAMPLE_RATE)) / 1e6
         
-        # 1. 连续内存矩阵，防止指针错位
-        self.waterfall_data = np.full((FFT_SIZE, WATERFALL_ROWS), -100.0)
-        
-        # 2. 翻转 Y 轴，实现专业的“自上而下”瀑布流效果
-        self.ui.waterfall_widget.getViewBox().invertY(True)
-        # 3. 开启自动降采样，防止矩阵过大时挤压出横线伪影
-        self.ui.waterfall_image.setAutoDownsample(True)
+        # 1. 恢复矩阵形状，用 -100 填充深蓝色背景
+        self.waterfall_data = np.full((WATERFALL_ROWS, FFT_SIZE), -100.0)
 
+        # 2. 核心修复：在设定坐标系前，先塞入空数据占位，避免 PyQtGraph 忽略初始坐标
+        self.ui.waterfall_image.setImage(np.ascontiguousarray(self.waterfall_data.T), autoLevels=False)
+
+        # 3. 强制锁定 Y 轴视图范围 (0~ROWS)，防止量程暴走到 10000
+        self.ui.waterfall_widget.setYRange(0, WATERFALL_ROWS, padding=0)
+
+        # --- 初始化硬件频率并对齐 UI ---
         self.initialize_hardware_state()
 
+        # --- 定时器配置 ---
         self.drag_tune_timer = QtCore.QTimer()
         self.drag_tune_timer.setSingleShot(True)
         self.drag_tune_timer.timeout.connect(self.apply_dragged_freq)
@@ -56,21 +66,23 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.last_dial_value = self.ui.freq_dial.value()
 
+        # --- 绑定事件与启动绘图 ---
         self.bind_events()
         
+        # 默认 UI 状态
         self.ui.plot_widget.setMouseEnabled(x=True, y=False)
         self.ui.center_line.setMovable(False)
 
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.update_plot)
-        self.plot_timer.start(100) 
+        self.plot_timer.start(100) # 10FPS 绘图
 
         self.sync_timer = QtCore.QTimer()
         self.sync_timer.timeout.connect(self.sync_status)
-        self.sync_timer.start(1000) 
+        self.sync_timer.start(1000) # 1s 状态同步 
 
     def update_waterfall_rect(self):
-        """精准映射坐标轴，防止横向拉伸"""
+        """精准映射坐标轴，确保底图宽度始终等于 SDR 绝对采样带宽"""
         mhz = self.sdr_freq_hz / 1e6
         sr_mhz = self.cur_sr_mhz
         min_f = mhz - (sr_mhz / 2.0)
@@ -78,6 +90,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.waterfall_image.setRect(rect)
 
     def initialize_hardware_state(self):
+        """启动时强制对齐硬件频率与 UI 坐标系"""
         try:
             self.sdr_freq_hz = self.backend.get_sdr_freq()
             self.target_freq_hz = self.backend.get_target_freq()
@@ -112,7 +125,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.ui.mode_combo.currentIndexChanged.connect(self.on_mode_changed)
         self.ui.tuning_mode_btn.clicked.connect(self.toggle_tuning_mode)
-        
         self.ui.config_btn.clicked.connect(self.open_config_dialog)
         
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
@@ -159,7 +171,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         if new_sr_mhz != self.cur_sr_mhz:
             self.cur_sr_mhz = new_sr_mhz
             new_sr_hz = new_sr_mhz * 1e6
-            
             self.backend.set_sdr_samp_rate(new_sr_hz)
             self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/new_sr_hz)) / 1e6
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz)
@@ -209,7 +220,11 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 self.safe_set_target_freq(clicked_freq_hz)
 
     def on_xrange_changed(self, view_box, view_range):
+        """中央调谐：拖拽频谱背景时触发"""
         if self.tuning_mode == "CENTRAL" and not self.updating_view:
+            # 1. 立即冻结画面渲染，方便用户瞄准信号
+            self.pause_plot_update = True 
+            
             new_center_mhz = (view_range[0] + view_range[1]) / 2.0
             target_hz = max(MIN_FREQ_HZ, min(MAX_FREQ_HZ, new_center_mhz * 1e6))
             new_clamped_mhz = target_hz / 1e6
@@ -225,13 +240,23 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.update_waterfall_rect() 
             self.updating_view = False
             
+            # 启动防抖，推迟发送网络请求
             self.pending_sdr_freq_hz = target_hz
             self.drag_tune_timer.start(50) 
 
     def apply_dragged_freq(self):
+        """防抖结束后：下发指令，并计划恢复画面"""
         if self.pending_sdr_freq_hz:
             self.backend.set_sdr_freq(self.pending_sdr_freq_hz)
             self.backend.set_target_freq(self.pending_sdr_freq_hz)
+            
+        # 延迟 200ms 等待底层硬件频率锁定，然后恢复画面渲染
+        QtCore.QTimer.singleShot(200, self.resume_plot)
+
+    def resume_plot(self):
+        """解除画面冻结"""
+        self.pause_plot_update = False
+        self.averaged_power_db = None  # 清除平滑历史，防止残影
 
     def safe_set_sdr_and_target_freq(self, target_hz):
         clamped_hz = max(MIN_FREQ_HZ, min(MAX_FREQ_HZ, target_hz))
@@ -296,7 +321,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
     def on_set_frequency_clicked(self):
         try:
             target_hz = float(self.ui.freq_input.text()) * 1e6 
-            self.safe_set_sdr_and_target_freq(target_hz)1 
+            self.safe_set_sdr_and_target_freq(target_hz)
             self.ui.freq_input.clear()
         except ValueError:
             QtWidgets.QMessageBox.warning(self, "错误", "请输入有效的数字 (如 97.4)")
@@ -318,7 +343,13 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         except Exception: pass 
 
     def update_plot(self):
+        # 始终抽取数据以清空 ZMQ 缓冲区
         latest_fft = self.backend.get_latest_fft() 
+        
+        # 如果画面被冻结（例如正在拖动瞄准信号），直接返回不渲染
+        if self.pause_plot_update:
+            return
+
         if latest_fft is not None:
             power_db = 20 * np.log10(np.abs(latest_fft) / FFT_SIZE + 1e-12) + CALIBRATION_OFFSET
             
@@ -328,12 +359,13 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             current_x = self.base_freqs + (self.sdr_freq_hz / 1e6)
             self.ui.curve.setData(current_x, self.averaged_power_db)
             
-            # --- 核心修复：向下滚动的瀑布流 ---
-            # 1. 把矩阵往下推一行 (因为我们做了 invertY，Y=0 是最上面)
-            self.waterfall_data = np.roll(self.waterfall_data, 1, axis=1)
-            # 2. 把最新的一帧数据塞到最上面那行
-            self.waterfall_data[:, 0] = self.averaged_power_db
-            self.ui.waterfall_image.setImage(self.waterfall_data, autoLevels=False)
+            # 滚动矩阵 (最新数据存在底部)
+            self.waterfall_data = np.roll(self.waterfall_data, -1, axis=0)
+            self.waterfall_data[-1, :] = self.averaged_power_db
+            
+            # 重组为连续内存，防止出现满屏横线花屏
+            render_data = np.ascontiguousarray(self.waterfall_data.T)
+            self.ui.waterfall_image.setImage(render_data, autoLevels=False)
 
     def closeEvent(self, event):
         self.plot_timer.stop(); self.sync_timer.stop(); self.backend.close(); event.accept()
@@ -342,7 +374,12 @@ if __name__ == '__main__':
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app = QtWidgets.QApplication(sys.argv)
-    font = app.font(); font.setPointSize(12); app.setFont(font)
+    
+    # 全局字体设置，适应触摸屏
+    font = app.font()
+    font.setPointSize(12)
+    app.setFont(font)
+    
     main_window = SpectrumAnalyzer()
     main_window.show()
     sys.exit(app.exec_())

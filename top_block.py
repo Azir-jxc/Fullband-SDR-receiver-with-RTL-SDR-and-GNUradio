@@ -97,6 +97,7 @@ class top_block(gr.top_block, Qt.QWidget):
         self.gain_bb = gain_bb = 20
         self.dev_args = dev_args = 'rtl=0,direct_samp=0'
         self.demod_mode = demod_mode = 0
+        self.audio_value = audio_value = -70
 
         ##################################################
         # Blocks
@@ -258,18 +259,15 @@ class top_block(gr.top_block, Qt.QWidget):
         	audio_pass=5000,
         	audio_stop=5500,
         )
-        self.analog_agc_xx_0_1 = analog.agc_ff(1e-1, 0.02, 1.0)
-        self.analog_agc_xx_0_1.set_max_gain(65536)
-        self.analog_agc_xx_0_0 = analog.agc_ff(1e-1, 0.02, 1.0)
-        self.analog_agc_xx_0_0.set_max_gain(65536)
+        self.analog_agc_xx_0_0_0 = analog.agc_ff(1e-3, 0.4, 1.0)
+        self.analog_agc_xx_0_0_0.set_max_gain(65536)
 
 
 
         ##################################################
         # Connections
         ##################################################
-        self.connect((self.analog_agc_xx_0_0, 0), (self.blocks_selector_0_0, 3))
-        self.connect((self.analog_agc_xx_0_1, 0), (self.blocks_selector_0_0, 4))
+        self.connect((self.analog_agc_xx_0_0_0, 0), (self.audio_sink_0, 0))
         self.connect((self.analog_am_demod_cf_0, 0), (self.blocks_selector_0_0, 0))
         self.connect((self.analog_nbfm_rx_0, 0), (self.blocks_selector_0_0, 1))
         self.connect((self.analog_sig_source_x_1, 0), (self.blocks_multiply_xx_1, 1))
@@ -280,15 +278,15 @@ class top_block(gr.top_block, Qt.QWidget):
         self.connect((self.analog_wfm_rcv_0, 0), (self.blocks_selector_0_0, 2))
         self.connect((self.band_pass_filter_0, 0), (self.analog_simple_squelch_cc_3, 0))
         self.connect((self.band_pass_filter_0_0, 0), (self.analog_simple_squelch_cc_4, 0))
-        self.connect((self.blocks_complex_to_real_0, 0), (self.analog_agc_xx_0_0, 0))
-        self.connect((self.blocks_complex_to_real_0_0, 0), (self.analog_agc_xx_0_1, 0))
+        self.connect((self.blocks_complex_to_real_0, 0), (self.blocks_selector_0_0, 3))
+        self.connect((self.blocks_complex_to_real_0_0, 0), (self.blocks_selector_0_0, 4))
         self.connect((self.blocks_multiply_xx_1, 0), (self.low_pass_filter_0_0_0, 0))
         self.connect((self.blocks_selector_0, 3), (self.band_pass_filter_0, 0))
         self.connect((self.blocks_selector_0, 4), (self.band_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 1), (self.low_pass_filter_0, 0))
         self.connect((self.blocks_selector_0, 0), (self.low_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 2), (self.low_pass_filter_0_1, 0))
-        self.connect((self.blocks_selector_0_0, 0), (self.audio_sink_0, 0))
+        self.connect((self.blocks_selector_0_0, 0), (self.analog_agc_xx_0_0_0, 0))
         self.connect((self.blocks_stream_to_vector_0, 0), (self.fft_vxx_0, 0))
         self.connect((self.blocks_stream_to_vector_0_0, 0), (self.zeromq_pub_sink_0_0, 0))
         self.connect((self.fft_vxx_0, 0), (self.zeromq_pub_sink_0, 0))
@@ -408,6 +406,12 @@ class top_block(gr.top_block, Qt.QWidget):
         self.demod_mode = demod_mode
         self.blocks_selector_0.set_output_index(self.demod_mode)
         self.blocks_selector_0_0.set_input_index(self.demod_mode)
+
+    def get_audio_value(self):
+        return self.audio_value
+
+    def set_audio_value(self, audio_value):
+        self.audio_value = audio_value
 
 
 

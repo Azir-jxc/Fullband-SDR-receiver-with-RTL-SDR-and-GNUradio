@@ -32,6 +32,18 @@ options:
     state: enabled
 
 blocks:
+- name: audio_value
+  id: variable
+  parameters:
+    comment: ''
+    value: '-70'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [3966, 392]
+    rotation: 0
+    state: true
 - name: demod_mode
   id: variable
   parameters:
@@ -217,7 +229,7 @@ blocks:
     coordinate: [3466, 137]
     rotation: 0
     state: disabled
-- name: analog_agc_xx_0_0
+- name: analog_agc_xx_0_0_0
   id: analog_agc_xx
   parameters:
     affinity: ''
@@ -227,34 +239,14 @@ blocks:
     max_gain: '65536'
     maxoutbuf: '0'
     minoutbuf: '0'
-    rate: 1e-1
-    reference: '0.02'
+    rate: 1e-3
+    reference: '0.4'
     type: float
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3423, 451]
-    rotation: 0
-    state: enabled
-- name: analog_agc_xx_0_1
-  id: analog_agc_xx
-  parameters:
-    affinity: ''
-    alias: ''
-    comment: ''
-    gain: '1.0'
-    max_gain: '65536'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    rate: 1e-1
-    reference: '0.02'
-    type: float
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [3423, 571]
+    coordinate: [3933, 257]
     rotation: 0
     state: enabled
 - name: analog_agc_xx_0_2
@@ -356,7 +348,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [905, 449]
+    coordinate: [904, 449]
     rotation: 0
     state: true
 - name: analog_simple_squelch_cc_0
@@ -475,7 +467,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [4135, 289]
+    coordinate: [4144, 295]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0
@@ -1395,7 +1387,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [823, 99]
+    coordinate: [1033, 106]
     rotation: 0
     state: true
 - name: zeromq_pub_sink_0_0
@@ -1420,8 +1412,7 @@ blocks:
 
 connections:
 - [analog_agc_xx_0, '0', blocks_selector_0_0, '0']
-- [analog_agc_xx_0_0, '0', blocks_selector_0_0, '3']
-- [analog_agc_xx_0_1, '0', blocks_selector_0_0, '4']
+- [analog_agc_xx_0_0_0, '0', audio_sink_0, '0']
 - [analog_agc_xx_0_2, '0', audio_sink_0, '0']
 - [analog_am_demod_cf_0, '0', blocks_selector_0_0, '0']
 - [analog_nbfm_rx_0, '0', blocks_selector_0_0, '1']
@@ -1437,8 +1428,8 @@ connections:
 - [band_pass_filter_0_0, '0', analog_simple_squelch_cc_4, '0']
 - [blocks_complex_to_mag_0, '0', blocks_selector_0_0, '0']
 - [blocks_complex_to_mag_0, '0', dc_blocker_xx_0, '0']
-- [blocks_complex_to_real_0, '0', analog_agc_xx_0_0, '0']
-- [blocks_complex_to_real_0_0, '0', analog_agc_xx_0_1, '0']
+- [blocks_complex_to_real_0, '0', blocks_selector_0_0, '3']
+- [blocks_complex_to_real_0_0, '0', blocks_selector_0_0, '4']
 - [blocks_multiply_xx_0, '0', qtgui_freq_sink_x_0_0, '0']
 - [blocks_multiply_xx_1, '0', low_pass_filter_0_0_0, '0']
 - [blocks_selector_0, '0', low_pass_filter_0_0, '0']
@@ -1446,8 +1437,8 @@ connections:
 - [blocks_selector_0, '2', low_pass_filter_0_1, '0']
 - [blocks_selector_0, '3', band_pass_filter_0, '0']
 - [blocks_selector_0, '4', band_pass_filter_0_0, '0']
+- [blocks_selector_0_0, '0', analog_agc_xx_0_0_0, '0']
 - [blocks_selector_0_0, '0', analog_agc_xx_0_2, '0']
-- [blocks_selector_0_0, '0', audio_sink_0, '0']
 - [blocks_stream_to_vector_0, '0', fft_vxx_0, '0']
 - [blocks_stream_to_vector_0_0, '0', zeromq_pub_sink_0_0, '0']
 - [dc_blocker_xx_0, '0', analog_agc_xx_0, '0']
