@@ -39,9 +39,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
         # --- 解调与AGC状态缓存 ---
         self.demod_dialog = None
-        self.cur_demod_mode = "WFM"  # 记住当前模式
+        self.cur_demod_mode = "WFM"  
         self.cur_squelch = -70
-        self.cur_audio_value = 0.4   # 默认音量
+        self.cur_audio_value = 0.4   
 
         # --- 数据与内存初始化 ---
         self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/SAMPLE_RATE)) / 1e6
@@ -63,7 +63,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.averaged_power_db = None
         self.ui.avg_cycle_btn.setText(f"平均长度: {self.avg_lengths[self.avg_index]}")
         
-        self.last_dial_value = self.ui.freq_dial.value()
+        # 初始化双旋钮的状态
+        self.last_coarse_dial_value = self.ui.coarse_dial.value()
+        self.last_fine_dial_value = self.ui.fine_dial.value()
 
         self.bind_events()
         
@@ -114,7 +116,11 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
     def bind_events(self):
         self.ui.set_freq_btn.clicked.connect(self.on_set_frequency_clicked)
         self.ui.avg_cycle_btn.clicked.connect(self.cycle_averaging)
-        self.ui.freq_dial.valueChanged.connect(self.on_dial_rotated)
+        
+        # 绑定粗调和细调旋钮
+        self.ui.coarse_dial.valueChanged.connect(self.on_coarse_dial_rotated)
+        self.ui.fine_dial.valueChanged.connect(self.on_fine_dial_rotated)
+        
         self.ui.center_line.sigDragged.connect(self.on_line_dragged)
         self.ui.center_line.sigPositionChangeFinished.connect(self.on_line_dropped)
         
@@ -124,6 +130,37 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
+
+    # ================= 旋钮逻辑核心 =================
+    def on_coarse_dial_rotated(self, value):
+        delta = value - self.last_coarse_dial_value
+        if delta > 180: delta -= 360
+        elif delta < -180: delta += 360
+        self.last_coarse_dial_value = value
+        if delta == 0: return
+
+        step_hz = delta * 100e3  # 粗调：每转动一格 100 kHz
+
+        if self.tuning_mode == "CENTRAL":
+            self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + step_hz)
+        else:
+            # 自由模式下，粗调仅改变底层硬件频率（平移底图，不动红线）
+            self.safe_shift_sdr_only(self.sdr_freq_hz + step_hz)
+
+    def on_fine_dial_rotated(self, value):
+        delta = value - self.last_fine_dial_value
+        if delta > 180: delta -= 360
+        elif delta < -180: delta += 360
+        self.last_fine_dial_value = value
+        if delta == 0: return
+
+        step_hz = delta * 1e3  # 细调：每转动一格 5 kHz
+
+        if self.tuning_mode == "CENTRAL":
+            self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + step_hz)
+        else:
+            # 自由模式下，细调仅改变混频频率（红线在当前画面中移动）
+            self.safe_set_target_freq(self.target_freq_hz + step_hz)
 
     # ================= 前端与解调弹窗配置 =================
     def open_demod_config_dialog(self):
@@ -149,21 +186,18 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         new_high = self.demod_dialog.high_spin.value()
         self.cur_squelch = self.demod_dialog.squelch_spin.value()
         
-        # 处理滑块音量映射 
         slider_val = self.demod_dialog.audio_slider.value()
         self.cur_audio_value = 0.0 if slider_val == 0 else slider_val / 10.0
         
         idx = DEMOD_MODES[new_mode][0]
         DEMOD_MODES[new_mode] = (idx, new_low, new_high)
         
-        # 模式切换检查
         if self.cur_demod_mode != new_mode:
             self.cur_demod_mode = new_mode
             self.backend.set_demod_mode(idx)
             
         self.update_filter_region()
 
-        # 下发所有参数
         self.backend.set_squelch(self.cur_squelch)
         self.backend.set_audio_value(self.cur_audio_value)
         self.backend.set_filter_bw(new_mode, new_low, new_high)
@@ -301,6 +335,36 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.updating_view = False
         except Exception: pass
 
+    def safe_shift_sdr_only(self, target_hz):
+        """自由调谐专用的粗调逻辑：仅平移底图，保护红线留在带宽内"""
+        clamped_hz = max(MIN_FREQ_HZ, min(MAX_FREQ_HZ, target_hz))
+        mhz = clamped_hz / 1e6
+        try:
+            self.backend.set_sdr_freq(clamped_hz)
+            self.sdr_freq_hz = clamped_hz
+            
+            # 保护机制：如果用户把底图拖得太远，红线快掉出去了，就把红线"顶"在边缘
+            bw = self.cur_sr_mhz * 1e6 / 2.0
+            if self.target_freq_hz < clamped_hz - bw or self.target_freq_hz > clamped_hz + bw:
+                new_tar = max(clamped_hz - bw, min(clamped_hz + bw, self.target_freq_hz))
+                self.backend.set_target_freq(new_tar)
+                self.target_freq_hz = new_tar
+                tmhz = new_tar / 1e6
+                self.ui.center_line.setValue(tmhz)
+                self.update_filter_region(tmhz)
+                self.ui.freq_label.setText(f"当前频率: {tmhz:.3f} MHz")
+
+            self.averaged_power_db = None  
+            
+            self.updating_view = True
+            min_f = self.base_freqs[0] + mhz
+            max_f = self.base_freqs[-1] + mhz
+            self.ui.plot_widget.setXRange(min_f, max_f, padding=0)
+            self.ui.waterfall_widget.setXRange(min_f, max_f, padding=0)
+            self.update_waterfall_rect()
+            self.updating_view = False
+        except Exception: pass
+
     def safe_set_target_freq(self, target_hz):
         bw = self.cur_sr_mhz * 1e6 / 2.0
         clamped_hz = max(self.sdr_freq_hz - bw, min(self.sdr_freq_hz + bw, target_hz))
@@ -312,19 +376,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.update_filter_region(tmhz)
             self.ui.freq_label.setText(f"当前频率: {tmhz:.3f} MHz")
         except Exception: pass
-
-    def on_dial_rotated(self, value):
-        delta = value - self.last_dial_value
-        if delta > 180: delta -= 360
-        elif delta < -180: delta += 360
-        self.last_dial_value = value
-        if delta == 0: return
-
-        step_hz = (delta * (10.0 / 30.0)) * 1e6 
-        if self.tuning_mode == "CENTRAL":
-            self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + step_hz)
-        else:
-            self.safe_set_target_freq(self.target_freq_hz + step_hz)
 
     def on_line_dragged(self):
         if self.tuning_mode == "FREE":

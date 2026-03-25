@@ -57,7 +57,6 @@ class DemodConfigDialog(QtWidgets.QDialog):
         self.audio_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.audio_slider.setRange(0, 8)
         
-        # 初始化滑块位置
         init_val = 0 if cur_audio_value == 0 else int(cur_audio_value * 10)
         self.audio_slider.setValue(init_val)
         
@@ -78,7 +77,6 @@ class DemodConfigDialog(QtWidgets.QDialog):
         btn_layout.addWidget(self.close_btn)
         layout.addLayout(btn_layout)
 
-        # 联动：切换模式时，自动填入 config.py 中的默认带宽
         self.mode_combo.currentIndexChanged.connect(self.auto_update_filter_bounds)
 
     def on_audio_slide(self, val):
@@ -181,11 +179,11 @@ class Ui_MainWindow:
         ctrl_layout.setSpacing(15)
 
         self.avg_cycle_btn = QtWidgets.QPushButton() 
-        self.avg_cycle_btn.setMinimumSize(120, 40)
+        self.avg_cycle_btn.setMinimumSize(100, 40)
         ctrl_layout.addWidget(self.avg_cycle_btn)
 
         self.tuning_mode_btn = QtWidgets.QPushButton("模式: 中央调谐")
-        self.tuning_mode_btn.setMinimumSize(120, 40)
+        self.tuning_mode_btn.setMinimumSize(100, 40)
         ctrl_layout.addWidget(self.tuning_mode_btn)
 
         self.config_btn = QtWidgets.QPushButton("前端 ⚙️")
@@ -198,16 +196,33 @@ class Ui_MainWindow:
 
         ctrl_layout.addStretch() 
 
-        dial_label = QtWidgets.QLabel("Freq")
-        dial_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        ctrl_layout.addWidget(dial_label)
+        # ================= 新增：粗调与细调旋钮 =================
+        # 粗调 (Coarse)
+        coarse_layout = QtWidgets.QVBoxLayout()
+        self.coarse_dial = QtWidgets.QDial()
+        self.coarse_dial.setRange(0, 359)
+        self.coarse_dial.setWrapping(True)
+        self.coarse_dial.setNotchesVisible(True)
+        self.coarse_dial.setFixedSize(50, 50)
+        coarse_label = QtWidgets.QLabel("粗调")
+        coarse_label.setAlignment(QtCore.Qt.AlignCenter)
+        coarse_layout.addWidget(self.coarse_dial)
+        coarse_layout.addWidget(coarse_label)
+        ctrl_layout.addLayout(coarse_layout)
 
-        self.freq_dial = QtWidgets.QDial()
-        self.freq_dial.setRange(0, 359) 
-        self.freq_dial.setWrapping(True) 
-        self.freq_dial.setNotchesVisible(True) 
-        self.freq_dial.setFixedSize(60, 60) 
-        ctrl_layout.addWidget(self.freq_dial)
+        # 细调 (Fine)
+        fine_layout = QtWidgets.QVBoxLayout()
+        self.fine_dial = QtWidgets.QDial()
+        self.fine_dial.setRange(0, 359)
+        self.fine_dial.setWrapping(True)
+        self.fine_dial.setNotchesVisible(True)
+        self.fine_dial.setFixedSize(50, 50)
+        fine_label = QtWidgets.QLabel("细调")
+        fine_label.setAlignment(QtCore.Qt.AlignCenter)
+        fine_layout.addWidget(self.fine_dial)
+        fine_layout.addWidget(fine_label)
+        ctrl_layout.addLayout(fine_layout)
+        # =========================================================
 
         layout.addLayout(freq_layout)
         layout.addLayout(ctrl_layout)
