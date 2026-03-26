@@ -8,10 +8,6 @@ from config import *
 from radio_backend import RadioBackend
 from ui_layout import Ui_MainWindow
 
-# 全局明亮主题设置
-pg.setConfigOption('background', '#F5F5F5')
-pg.setConfigOption('foreground', '#333333')
-
 class SpectrumAnalyzer(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -61,7 +57,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.avg_index = 1
         self.alpha = 2.0 / (self.avg_lengths[self.avg_index] + 1.0)
         self.averaged_power_db = None
-        self.ui.avg_cycle_btn.setText(f"平均长度: {self.avg_lengths[self.avg_index]}")
+        self.ui.avg_cycle_btn.setText(f"FFT AVG\n平滑: {self.avg_lengths[self.avg_index]}")
         
         # 初始化双旋钮的状态
         self.last_coarse_dial_value = self.ui.coarse_dial.value()
@@ -87,6 +83,11 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         rect = QtCore.QRectF(min_f, 0, sr_mhz, WATERFALL_ROWS)
         self.ui.waterfall_image.setRect(rect)
 
+    def format_freq_display(self, hz):
+        """格式化巨型管的数字显示： 000.000 MHz"""
+        mhz = hz / 1e6
+        return f"{mhz:07.3f} MHz"
+
     def initialize_hardware_state(self):
         try:
             self.sdr_freq_hz = self.backend.get_sdr_freq()
@@ -108,7 +109,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             
             self.ui.center_line.setValue(tmhz)
             self.update_filter_region(tmhz)
-            self.ui.freq_label.setText(f"当前频率: {tmhz:.3f} MHz")
+            self.ui.freq_label.setText(self.format_freq_display(self.target_freq_hz))
             
             self.updating_view = False 
         except Exception as e: pass
@@ -117,7 +118,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.set_freq_btn.clicked.connect(self.on_set_frequency_clicked)
         self.ui.avg_cycle_btn.clicked.connect(self.cycle_averaging)
         
-        # 绑定粗调和细调旋钮
         self.ui.coarse_dial.valueChanged.connect(self.on_coarse_dial_rotated)
         self.ui.fine_dial.valueChanged.connect(self.on_fine_dial_rotated)
         
@@ -139,12 +139,10 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.last_coarse_dial_value = value
         if delta == 0: return
 
-        step_hz = delta * 100e3  # 粗调：每转动一格 100 kHz
-
+        step_hz = delta * 100e3 
         if self.tuning_mode == "CENTRAL":
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + step_hz)
         else:
-            # 自由模式下，粗调仅改变底层硬件频率（平移底图，不动红线）
             self.safe_shift_sdr_only(self.sdr_freq_hz + step_hz)
 
     def on_fine_dial_rotated(self, value):
@@ -154,12 +152,10 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.last_fine_dial_value = value
         if delta == 0: return
 
-        step_hz = delta * 1e3  # 细调：每转动一格 5 kHz
-
+        step_hz = delta * 5e3 
         if self.tuning_mode == "CENTRAL":
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + step_hz)
         else:
-            # 自由模式下，细调仅改变混频频率（红线在当前画面中移动）
             self.safe_set_target_freq(self.target_freq_hz + step_hz)
 
     # ================= 前端与解调弹窗配置 =================
@@ -256,19 +252,19 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
     def cycle_averaging(self):
         self.avg_index = (self.avg_index + 1) % len(self.avg_lengths)
         length = self.avg_lengths[self.avg_index]
-        self.ui.avg_cycle_btn.setText(f"平均长度: {length}")
+        self.ui.avg_cycle_btn.setText(f"FFT AVG\n平滑: {length}")
         self.alpha = 1.0 if length == 1 else 2.0 / (length + 1.0)
         self.averaged_power_db = None 
 
     def toggle_tuning_mode(self):
         if self.tuning_mode == "CENTRAL":
             self.tuning_mode = "FREE"
-            self.ui.tuning_mode_btn.setText("模式: 自由调谐")
+            self.ui.tuning_mode_btn.setText("TUNE MODE\n自由调谐")
             self.ui.plot_widget.setMouseEnabled(x=False, y=False) 
             self.ui.center_line.setMovable(True)                  
         else:
             self.tuning_mode = "CENTRAL"
-            self.ui.tuning_mode_btn.setText("模式: 中央调谐")
+            self.ui.tuning_mode_btn.setText("TUNE MODE\n中央调谐")
             self.ui.plot_widget.setMouseEnabled(x=True, y=False)  
             self.ui.center_line.setMovable(False)                 
             self.safe_set_sdr_and_target_freq(self.target_freq_hz)
@@ -293,7 +289,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.target_freq_hz = target_hz
             self.ui.center_line.setValue(new_clamped_mhz)
             self.update_filter_region(new_clamped_mhz)
-            self.ui.freq_label.setText(f"当前频率: {new_clamped_mhz:.3f} MHz")
+            self.ui.freq_label.setText(self.format_freq_display(target_hz))
             
             self.updating_view = True
             self.ui.waterfall_widget.setXRange(view_range[0], view_range[1], padding=0)
@@ -331,19 +327,17 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.update_waterfall_rect()
             self.ui.center_line.setValue(mhz)
             self.update_filter_region(mhz)
-            self.ui.freq_label.setText(f"当前频率: {mhz:.3f} MHz")
+            self.ui.freq_label.setText(self.format_freq_display(clamped_hz))
             self.updating_view = False
         except Exception: pass
 
     def safe_shift_sdr_only(self, target_hz):
-        """自由调谐专用的粗调逻辑：仅平移底图，保护红线留在带宽内"""
         clamped_hz = max(MIN_FREQ_HZ, min(MAX_FREQ_HZ, target_hz))
         mhz = clamped_hz / 1e6
         try:
             self.backend.set_sdr_freq(clamped_hz)
             self.sdr_freq_hz = clamped_hz
             
-            # 保护机制：如果用户把底图拖得太远，红线快掉出去了，就把红线"顶"在边缘
             bw = self.cur_sr_mhz * 1e6 / 2.0
             if self.target_freq_hz < clamped_hz - bw or self.target_freq_hz > clamped_hz + bw:
                 new_tar = max(clamped_hz - bw, min(clamped_hz + bw, self.target_freq_hz))
@@ -352,7 +346,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 tmhz = new_tar / 1e6
                 self.ui.center_line.setValue(tmhz)
                 self.update_filter_region(tmhz)
-                self.ui.freq_label.setText(f"当前频率: {tmhz:.3f} MHz")
+                self.ui.freq_label.setText(self.format_freq_display(new_tar))
 
             self.averaged_power_db = None  
             
@@ -374,7 +368,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             tmhz = clamped_hz / 1e6
             self.ui.center_line.setValue(tmhz)
             self.update_filter_region(tmhz)
-            self.ui.freq_label.setText(f"当前频率: {tmhz:.3f} MHz")
+            self.ui.freq_label.setText(self.format_freq_display(clamped_hz))
         except Exception: pass
 
     def on_line_dragged(self):
@@ -382,7 +376,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.is_dragging = True
             target_freq_mhz = self.ui.center_line.value()
             self.update_filter_region(target_freq_mhz)
-            self.ui.freq_label.setText(f"当前频率: {target_freq_mhz:.3f} MHz")
+            self.ui.freq_label.setText(self.format_freq_display(target_freq_mhz * 1e6))
 
     def on_line_dropped(self):
         if self.tuning_mode == "FREE":
@@ -411,7 +405,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 if abs(current_view_center - (self.sdr_freq_hz / 1e6)) > 0.1: 
                     self.safe_set_sdr_and_target_freq(self.sdr_freq_hz)
 
-                self.ui.freq_label.setText(f"当前频率: {(self.target_freq_hz / 1e6):.3f} MHz")
+                self.ui.freq_label.setText(self.format_freq_display(self.target_freq_hz))
         except Exception: pass 
 
     def update_plot(self):
@@ -433,6 +427,13 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             render_data = np.ascontiguousarray(self.waterfall_data.T)
             self.ui.waterfall_image.setImage(render_data, autoLevels=False)
 
+            # ================= 驱动 S-Meter =================
+            # 找到目标频率在当前频谱 X 轴中最接近的索引点，提取其 dB 值
+            target_mhz = self.target_freq_hz / 1e6
+            idx = (np.abs(current_x - target_mhz)).argmin()
+            s_meter_val = self.averaged_power_db[idx]
+            self.ui.s_meter.setValue(int(s_meter_val))
+
     def closeEvent(self, event):
         self.plot_timer.stop(); self.sync_timer.stop(); self.backend.close(); event.accept()
 
@@ -440,10 +441,6 @@ if __name__ == '__main__':
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app = QtWidgets.QApplication(sys.argv)
-    
-    font = app.font()
-    font.setPointSize(12)
-    app.setFont(font)
     
     main_window = SpectrumAnalyzer()
     main_window.show()
