@@ -10,27 +10,24 @@ QMainWindow, QDialog, QWidget {
     color: #E0E0E0; 
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
 }
-/* 频率容器专门样式，严格限制只渲染外框，防止子控件(数字)继承边框 */
 QWidget#FreqContainer {
     background-color: #000000; 
     border: 2px solid #333333; 
     border-radius: 8px; 
 }
-/* 触屏块状大按钮 */
 QPushButton { 
     background-color: #2D2D2D; 
-    border: 2px solid #404040; 
-    border-radius: 8px; 
+    border: 1px solid #555555; 
+    border-radius: 6px; 
     color: #E0E0E0; 
-    font-size: 16px; 
+    font-size: 14px; 
     font-weight: bold; 
-    padding: 15px 5px; 
+    padding: 8px 15px; 
 }
 QPushButton:pressed { 
     background-color: #00FFCC; 
     color: #000000; 
 }
-/* S-Meter 信号条 */
 QProgressBar { 
     border: 1px solid #333; 
     border-radius: 4px; 
@@ -44,7 +41,6 @@ QProgressBar::chunk {
     background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, 
         stop:0 #00FF00, stop:0.7 #FFFF00, stop:1 #FF1744); 
 }
-/* 弹窗内部组件 */
 QGroupBox { 
     color: #00FFCC; 
     font-weight: bold; 
@@ -67,7 +63,6 @@ QSpinBox, QDoubleSpinBox, QComboBox {
 
 # ================= 自定义交互式频率管组件 =================
 class DigitLabel(QtWidgets.QLabel):
-    """独立的数字位，捕捉点击高亮和左右拖拽"""
     sig_stepped = QtCore.pyqtSignal(int)
     sig_selected = QtCore.pyqtSignal(int)
 
@@ -81,10 +76,8 @@ class DigitLabel(QtWidgets.QLabel):
         self.set_selected(False)
 
     def set_selected(self, selected):
-        # 强制 border: none，切断继承，并保证数字连续性
         base_style = "font-size: 56px; font-weight: bold; font-family: 'Consolas', monospace; border: none;"
         if selected:
-            # 选中时加上圆角，显得像光标卡在数字上
             self.setStyleSheet(f"{base_style} color: #000000; background-color: #00FFCC; border-radius: 6px;")
         else:
             self.setStyleSheet(f"{base_style} color: #00FFCC; background-color: transparent;")
@@ -108,54 +101,46 @@ class DigitLabel(QtWidgets.QLabel):
             self.drag_accum += threshold
 
 class InteractiveFreqDisplay(QtWidgets.QWidget):
-    """封装完整的交互式频率面板"""
     sig_step_requested = QtCore.pyqtSignal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.freq_hz = 0
-        
-        # 绑定 QSS 中的专用 ID，并开启背景渲染
         self.setObjectName("FreqContainer")
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(15, 5, 15, 5)
-        layout.setSpacing(0) # 将间距设为0，让数字紧贴，呈现整体感
+        layout.setSpacing(0) 
         
         self.digits = []
         
-        # 频率前面 4 位 (百兆、十兆、兆)
-        self.add_digit(layout, 1000000000) # 1G
-        self.add_digit(layout, 100000000)  # 100M
-        self.add_digit(layout, 10000000)   # 10M
-        self.add_digit(layout, 1000000)    # 1M
+        self.add_digit(layout, 1000000000) 
+        self.add_digit(layout, 100000000)  
+        self.add_digit(layout, 10000000)   
+        self.add_digit(layout, 1000000)    
         
-        # 小数点 (精准对齐底部并缩小宽度)
         dot = QtWidgets.QLabel(".")
         dot.setStyleSheet("color: #00FFCC; font-size: 56px; font-weight: bold; font-family: 'Consolas', monospace; border: none; background: transparent;")
         dot.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignCenter)
-        dot.setFixedSize(20, 70) # 把小数点框压窄，防止隔开数字
+        dot.setFixedSize(20, 70) 
         layout.addWidget(dot)
         
-        # 频率后面 3 位 (百K、十K、单K)
-        self.add_digit(layout, 100000)     # 100k
-        self.add_digit(layout, 10000)      # 10k
-        self.add_digit(layout, 1000)       # 1k
+        self.add_digit(layout, 100000)     
+        self.add_digit(layout, 10000)      
+        self.add_digit(layout, 1000)       
         
-        # 单位 MHz (利用 padding-bottom 把它稍微垫高，和数字的基线平齐)
         unit = QtWidgets.QLabel(" MHz")
         unit.setStyleSheet("color: #00FFCC; font-size: 26px; font-weight: bold; border: none; background: transparent; padding-bottom: 12px;")
         unit.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignLeft)
         unit.setFixedHeight(70)
         layout.addWidget(unit)
         
-        # 默认选中 100kHz 位
         self.on_digit_selected(100000)
 
     def add_digit(self, layout, step_hz):
         lbl = DigitLabel(step_hz)
-        lbl.setFixedSize(38, 70) # 固定每个数字位的大小，保持等宽字体对齐
+        lbl.setFixedSize(38, 70) 
         lbl.sig_selected.connect(self.on_digit_selected)
         lbl.sig_stepped.connect(lambda direction, step=step_hz: self.sig_step_requested.emit(direction * step))
         self.digits.append(lbl)
@@ -167,7 +152,7 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
 
     def set_freq(self, hz):
         self.freq_hz = hz
-        val = int(round(hz / 1000)) # 提取到 kHz
+        val = int(round(hz / 1000)) 
         s = f"{val:07d}" 
         if len(s) > 7: s = s[-7:] 
         
@@ -175,12 +160,47 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
             if i < len(self.digits):
                 self.digits[i].setText(char)
 
-# ================= 此行以下的代码（包括弹窗和 Ui_MainWindow）完全保持原样 =================
-# ... (保留你之前的 DemodConfigDialog, ConfigDialog 和 Ui_MainWindow 代码)
-# ==========================================================
+# ================= 弹窗组件类 =================
+
+class SpectrumConfigDialog(QtWidgets.QDialog):
+    """新增：频谱与调谐设置弹窗"""
+    def __init__(self, parent=None, cur_tune="CENTRAL", cur_avg="1"):
+        super().__init__(parent)
+        self.setWindowTitle("频谱与调谐设置")
+        self.setMinimumWidth(300)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool)
+        self.setStyleSheet(DARK_STYLE)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(15)
+
+        tune_layout = QtWidgets.QHBoxLayout()
+        tune_layout.addWidget(QtWidgets.QLabel("调谐模式:"))
+        self.tune_combo = QtWidgets.QComboBox()
+        self.tune_combo.addItems(["CENTRAL (中央调谐)", "FREE (自由调谐)"])
+        self.tune_combo.setCurrentText("CENTRAL (中央调谐)" if cur_tune == "CENTRAL" else "FREE (自由调谐)")
+        self.tune_combo.setMinimumHeight(35)
+        tune_layout.addWidget(self.tune_combo)
+        layout.addLayout(tune_layout)
+
+        avg_layout = QtWidgets.QHBoxLayout()
+        avg_layout.addWidget(QtWidgets.QLabel("FFT 平滑 (AVG):"))
+        self.avg_combo = QtWidgets.QComboBox()
+        self.avg_combo.addItems(["1", "5", "10", "25"])
+        self.avg_combo.setCurrentText(str(cur_avg))
+        self.avg_combo.setMinimumHeight(35)
+        avg_layout.addWidget(self.avg_combo)
+        layout.addLayout(avg_layout)
+
+        btn_layout = QtWidgets.QHBoxLayout()
+        self.apply_btn = QtWidgets.QPushButton("应用")
+        self.apply_btn.setStyleSheet("background-color: #0078D7; color: white;")
+        self.close_btn = QtWidgets.QPushButton("关闭")
+        btn_layout.addWidget(self.apply_btn)
+        btn_layout.addWidget(self.close_btn)
+        layout.addLayout(btn_layout)
 
 class DemodConfigDialog(QtWidgets.QDialog):
-    # (此弹窗代码与上个版本完全一致，为了节省篇幅保持原样)
     def __init__(self, parent=None, cur_mode="WFM", cur_low=-75000, cur_high=75000, cur_squelch=-70, cur_audio_value=0.4):
         super().__init__(parent)
         self.setWindowTitle("解调与接收配置")
@@ -250,7 +270,6 @@ class DemodConfigDialog(QtWidgets.QDialog):
             self.high_spin.setValue(int(high))
 
 class ConfigDialog(QtWidgets.QDialog):
-    # (此弹窗代码与上个版本完全一致)
     def __init__(self, parent=None, cur_rf=20, cur_if=20, cur_bb=20, cur_sr="2.4", cur_mode="正交采样 (Quadrature)"):
         super().__init__(parent)
         self.setWindowTitle("硬件射频前端")
@@ -300,6 +319,13 @@ class ConfigDialog(QtWidgets.QDialog):
 
 
 class Ui_MainWindow:
+    def create_status_badge(self, text, color="#00FFCC"):
+        """边框颜色和字体颜色同步的指示灯"""
+        lbl = QtWidgets.QLabel(text)
+        lbl.setAlignment(QtCore.Qt.AlignCenter)
+        lbl.setStyleSheet(f"background-color: #111111; color: {color}; border: 1px solid {color}; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; font-family: 'Consolas', monospace;")
+        return lbl
+
     def setup_ui(self, window):
         window.setWindowTitle("Malachite-Style SDR")
         window.resize(1024, 600)
@@ -308,29 +334,70 @@ class Ui_MainWindow:
         main_widget = QtWidgets.QWidget()
         window.setCentralWidget(main_widget)
         
-        main_layout = QtWidgets.QHBoxLayout(main_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(15)
+        # 整体采用上下垂直布局
+        root_layout = QtWidgets.QVBoxLayout(main_widget)
+        root_layout.setContentsMargins(10, 10, 10, 10)
+        root_layout.setSpacing(10)
 
-        # ================= 左侧：数据可视化区 =================
-        left_panel = QtWidgets.QVBoxLayout()
+        # ================= 1. 顶栏：左侧状态灯矩阵 + 右侧控制按钮 =================
+        top_bar_layout = QtWidgets.QHBoxLayout()
+        top_bar_layout.setSpacing(15)
         
-        # 1. 交互式数字荧光屏
-        top_dash_layout = QtWidgets.QHBoxLayout()
-        self.freq_display = InteractiveFreqDisplay()
-        top_dash_layout.addWidget(self.freq_display)
-        top_dash_layout.addStretch() # 把频率条往左推
-        left_panel.addLayout(top_dash_layout)
+        # 状态灯布局
+        status_layout = QtWidgets.QHBoxLayout()
+        status_layout.setSpacing(8)
+        self.lbl_mod = self.create_status_badge("MOD: WFM", "#00FFCC")
+        self.lbl_tune = self.create_status_badge("TUNE: CENT", "#FF9800")
+        self.lbl_samp = self.create_status_badge("SMP: QUAD", "#8BC34A")
+        self.lbl_sr = self.create_status_badge("SR: 2.4M", "#8BC34A")
+        self.lbl_sql = self.create_status_badge("SQL: -70", "#FF5252")
+        self.lbl_avg = self.create_status_badge("AVG: 1", "#E040FB") 
+        self.lbl_agc = self.create_status_badge("AGC: OFF", "#666666") 
+        
+        status_layout.addWidget(self.lbl_mod)
+        status_layout.addWidget(self.lbl_tune)
+        status_layout.addWidget(self.lbl_samp)
+        status_layout.addWidget(self.lbl_sr)
+        status_layout.addWidget(self.lbl_sql)
+        status_layout.addWidget(self.lbl_avg)
+        status_layout.addWidget(self.lbl_agc)
+        
+        top_bar_layout.addLayout(status_layout)
+        top_bar_layout.addStretch() # 把两拨人往左右两侧推开
+        
+        # 右侧按钮组 (三个弹窗入口)
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.setSpacing(8)
+        self.demod_config_btn = QtWidgets.QPushButton("解调设置")
+        self.config_btn = QtWidgets.QPushButton("射频前端")
+        self.spectrum_config_btn = QtWidgets.QPushButton("频谱设置")
+        
+        btn_layout.addWidget(self.demod_config_btn)
+        btn_layout.addWidget(self.config_btn)
+        btn_layout.addWidget(self.spectrum_config_btn)
+        
+        top_bar_layout.addLayout(btn_layout)
+        root_layout.addLayout(top_bar_layout)
 
-        # 2. S-Meter (信号强度指示条)
+        # ================= 2. 下方主内容：独占全宽的图形区 =================
+        main_content_layout = QtWidgets.QVBoxLayout()
+        
+        # 交互式数字荧光屏 
+        freq_layout = QtWidgets.QHBoxLayout()
+        self.freq_display = InteractiveFreqDisplay()
+        freq_layout.addWidget(self.freq_display)
+        freq_layout.addStretch() # 保证频率屏居左不拉伸
+        main_content_layout.addLayout(freq_layout)
+
+        # S-Meter (信号强度指示条)
         self.s_meter = QtWidgets.QProgressBar()
         self.s_meter.setRange(-100, 0)
         self.s_meter.setValue(-100)
         self.s_meter.setFormat(" S-Meter: %v dBm ")
         self.s_meter.setFixedHeight(20)
-        left_panel.addWidget(self.s_meter)
+        main_content_layout.addWidget(self.s_meter)
 
-        # 3. 无边框绘图区
+        # 无边框绘图区
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         pg.setConfigOption('background', '#000000')
         pg.setConfigOption('foreground', '#666666')
@@ -368,32 +435,7 @@ class Ui_MainWindow:
         self.waterfall_image.setLevels([-100, 0]) 
         
         self.splitter.addWidget(self.waterfall_widget)
-        self.splitter.setSizes([250, 250])
-        left_panel.addWidget(self.splitter)
+        self.splitter.setSizes([300, 300]) # 因为全宽了，图表可以更大
         
-        # ================= 右侧：大块状控制台 (移除旋钮) =================
-        right_panel = QtWidgets.QVBoxLayout()
-        right_panel.setSpacing(15)
-        
-        panel_label = QtWidgets.QLabel("CONTROL DESK")
-        panel_label.setAlignment(QtCore.Qt.AlignCenter)
-        panel_label.setStyleSheet("color: #666; font-weight: bold; letter-spacing: 2px;")
-        right_panel.addWidget(panel_label)
-
-        self.demod_config_btn = QtWidgets.QPushButton("DEMOD / AUDIO\n解调与音量")
-        self.demod_config_btn.setStyleSheet("background-color: #005A9E;") 
-        right_panel.addWidget(self.demod_config_btn)
-        
-        self.config_btn = QtWidgets.QPushButton("RF FRONTEND\n射频前端")
-        right_panel.addWidget(self.config_btn)
-
-        self.tuning_mode_btn = QtWidgets.QPushButton("TUNE MODE\n中央调谐")
-        right_panel.addWidget(self.tuning_mode_btn)
-
-        self.avg_cycle_btn = QtWidgets.QPushButton("FFT AVG\n平滑: 1")
-        right_panel.addWidget(self.avg_cycle_btn)
-
-        right_panel.addStretch() # 自动填补下方空白区域
-
-        main_layout.addLayout(left_panel, stretch=7)
-        main_layout.addLayout(right_panel, stretch=2)
+        main_content_layout.addWidget(self.splitter)
+        root_layout.addLayout(main_content_layout)

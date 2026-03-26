@@ -35,6 +35,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
         # --- 解调与AGC状态缓存 ---
         self.demod_dialog = None
+        self.spectrum_dialog = None  # 新增的频谱弹窗实例
         self.cur_demod_mode = "WFM"  
         self.cur_squelch = -70
         self.cur_audio_value = 0.4   
@@ -56,8 +57,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.avg_index = 1
         self.alpha = 2.0 / (self.avg_lengths[self.avg_index] + 1.0)
         self.averaged_power_db = None
-        self.ui.avg_cycle_btn.setText(f"FFT AVG\n平滑: {self.avg_lengths[self.avg_index]}")
         
+        self.update_status_badges() # 初始化时刷新顶栏状态
         self.bind_events()
         
         self.ui.plot_widget.setMouseEnabled(x=True, y=False)
@@ -70,6 +71,21 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.sync_timer = QtCore.QTimer()
         self.sync_timer.timeout.connect(self.sync_status)
         self.sync_timer.start(1000) 
+
+    def update_status_badges(self):
+        """全面刷新顶部指示灯"""
+        self.ui.lbl_mod.setText(f"MOD: {self.cur_demod_mode}")
+        self.ui.lbl_tune.setText("TUNE: FREE" if self.tuning_mode == "FREE" else "TUNE: CENT")
+        
+        samp_abbr = "QUAD"
+        if "I 通道" in self.cur_samp_mode: samp_abbr = "DIR-I"
+        elif "Q 通道" in self.cur_samp_mode: samp_abbr = "DIR-Q"
+        self.ui.lbl_samp.setText(f"SMP: {samp_abbr}")
+        
+        self.ui.lbl_sr.setText(f"SR: {self.cur_sr_mhz}M")
+        self.ui.lbl_sql.setText(f"SQL: {self.cur_squelch}")
+        self.ui.lbl_avg.setText(f"AVG: {self.avg_lengths[self.avg_index]}")
+        # AGC 固定 OFF 显示
 
     def update_waterfall_rect(self):
         mhz = self.sdr_freq_hz / 1e6
@@ -98,37 +114,73 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.update_waterfall_rect()
             self.ui.center_line.setValue(tmhz)
             self.update_filter_region(tmhz)
-            
-            # 将硬件频率同步到数字面板
             self.ui.freq_display.set_freq(self.target_freq_hz)
             
             self.updating_view = False 
         except Exception as e: pass
 
     def bind_events(self):
-        # 绑定全新的交互式频率拖拽信号
         self.ui.freq_display.sig_step_requested.connect(self.on_freq_step_requested)
-        
-        self.ui.avg_cycle_btn.clicked.connect(self.cycle_averaging)
         self.ui.center_line.sigDragged.connect(self.on_line_dragged)
         self.ui.center_line.sigPositionChangeFinished.connect(self.on_line_dropped)
-        self.ui.tuning_mode_btn.clicked.connect(self.toggle_tuning_mode)
-        self.ui.config_btn.clicked.connect(self.open_config_dialog)
+        
+        # 绑定右上角的三个按钮
         self.ui.demod_config_btn.clicked.connect(self.open_demod_config_dialog)
+        self.ui.config_btn.clicked.connect(self.open_config_dialog)
+        self.ui.spectrum_config_btn.clicked.connect(self.open_spectrum_config_dialog)
+        
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
 
-    # ================= 交互式面板核心逻辑 =================
     def on_freq_step_requested(self, delta_hz):
-        """处理面板上数字被左右拖拽时发出的步进请求"""
         if self.tuning_mode == "CENTRAL":
-            # 中央调谐：平移整个频谱底图
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + delta_hz)
         else:
-            # 自由调谐：仅在画面内移动目标红线
             self.safe_set_target_freq(self.target_freq_hz + delta_hz)
 
-    # ================= 前端与解调弹窗配置 =================
+    # ================= 新增：频谱与调谐设置弹窗 =================
+    def open_spectrum_config_dialog(self):
+        if self.spectrum_dialog is None:
+            from ui_layout import SpectrumConfigDialog
+            cur_avg_str = str(self.avg_lengths[self.avg_index])
+            self.spectrum_dialog = SpectrumConfigDialog(self, self.tuning_mode, cur_avg_str)
+            self.spectrum_dialog.apply_btn.clicked.connect(self.apply_spectrum_config)
+            self.spectrum_dialog.close_btn.clicked.connect(self.spectrum_dialog.hide)
+            
+        self.spectrum_dialog.tune_combo.setCurrentIndex(0 if self.tuning_mode == "CENTRAL" else 1)
+        self.spectrum_dialog.avg_combo.setCurrentText(str(self.avg_lengths[self.avg_index]))
+        self.spectrum_dialog.show()
+        self.spectrum_dialog.raise_()
+
+    def apply_spectrum_config(self):
+        if not self.spectrum_dialog: return
+        
+        # 应用调谐模式
+        new_tune_idx = self.spectrum_dialog.tune_combo.currentIndex()
+        new_tune = "CENTRAL" if new_tune_idx == 0 else "FREE"
+        
+        # 应用 FFT 平滑
+        new_avg_str = self.spectrum_dialog.avg_combo.currentText()
+        self.avg_index = self.avg_lengths.index(int(new_avg_str))
+        length = self.avg_lengths[self.avg_index]
+        self.alpha = 1.0 if length == 1 else 2.0 / (length + 1.0)
+        self.averaged_power_db = None 
+
+        # 如果调谐模式切换了，需要重设图表交互属性
+        if self.tuning_mode != new_tune:
+            self.tuning_mode = new_tune
+            if self.tuning_mode == "FREE":
+                self.ui.plot_widget.setMouseEnabled(x=False, y=False) 
+                self.ui.center_line.setMovable(True)                  
+            else:
+                self.ui.plot_widget.setMouseEnabled(x=True, y=False)  
+                self.ui.center_line.setMovable(False)                 
+                self.safe_set_sdr_and_target_freq(self.target_freq_hz)
+                
+        self.update_status_badges()
+        self.spectrum_dialog.hide()
+
+    # ================= 解调与射频弹窗 =================
     def open_demod_config_dialog(self):
         if self.demod_dialog is None:
             from ui_layout import DemodConfigDialog
@@ -166,6 +218,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.backend.set_squelch(self.cur_squelch)
         self.backend.set_audio_value(self.cur_audio_value)
         self.backend.set_filter_bw(new_mode, new_low, new_high)
+        
+        self.update_status_badges()
         self.demod_dialog.hide()
 
     def open_config_dialog(self):
@@ -209,6 +263,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/new_sr_hz)) / 1e6
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz)
 
+        self.update_status_badges()
         self.config_dialog.hide()
 
     # ================= 业务逻辑与交互 =================
@@ -216,26 +271,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         if center_freq_mhz is None: center_freq_mhz = self.ui.center_line.value()
         _, low_hz, high_hz = DEMOD_MODES[self.cur_demod_mode]
         self.ui.filter_region.setRegion([center_freq_mhz + (low_hz / 1e6), center_freq_mhz + (high_hz / 1e6)])
-
-    def cycle_averaging(self):
-        self.avg_index = (self.avg_index + 1) % len(self.avg_lengths)
-        length = self.avg_lengths[self.avg_index]
-        self.ui.avg_cycle_btn.setText(f"FFT AVG\n平滑: {length}")
-        self.alpha = 1.0 if length == 1 else 2.0 / (length + 1.0)
-        self.averaged_power_db = None 
-
-    def toggle_tuning_mode(self):
-        if self.tuning_mode == "CENTRAL":
-            self.tuning_mode = "FREE"
-            self.ui.tuning_mode_btn.setText("TUNE MODE\n自由调谐")
-            self.ui.plot_widget.setMouseEnabled(x=False, y=False) 
-            self.ui.center_line.setMovable(True)                  
-        else:
-            self.tuning_mode = "CENTRAL"
-            self.ui.tuning_mode_btn.setText("TUNE MODE\n中央调谐")
-            self.ui.plot_widget.setMouseEnabled(x=True, y=False)  
-            self.ui.center_line.setMovable(False)                 
-            self.safe_set_sdr_and_target_freq(self.target_freq_hz)
 
     def on_plot_clicked(self, event):
         if self.tuning_mode == "FREE" and event.button() == QtCore.Qt.LeftButton:
@@ -257,7 +292,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.target_freq_hz = target_hz
             self.ui.center_line.setValue(new_clamped_mhz)
             self.update_filter_region(new_clamped_mhz)
-            
             self.ui.freq_display.set_freq(target_hz)
             
             self.updating_view = True
@@ -296,7 +330,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.update_waterfall_rect()
             self.ui.center_line.setValue(mhz)
             self.update_filter_region(mhz)
-            
             self.ui.freq_display.set_freq(clamped_hz)
             self.updating_view = False
         except Exception: pass
