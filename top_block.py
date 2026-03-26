@@ -102,7 +102,7 @@ class top_block(gr.top_block, Qt.QWidget):
         self.gain_if = gain_if = 20
         self.gain_bb = gain_bb = 20
         self.dev_args = dev_args = 'rtl=0,direct_samp=0'
-        self.demod_mode = demod_mode = 0
+        self.demod_mode = demod_mode = 2
         self.audio_value = audio_value = 0.4
         self.am_co_freq = am_co_freq = 5e3
 

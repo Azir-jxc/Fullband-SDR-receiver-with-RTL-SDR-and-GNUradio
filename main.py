@@ -41,7 +41,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
         # --- 数据与内存初始化 ---
         self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/SAMPLE_RATE)) / 1e6
-        
         self.waterfall_data = np.full((WATERFALL_ROWS, FFT_SIZE), -100.0)
         self.ui.waterfall_image.setImage(np.ascontiguousarray(self.waterfall_data.T), autoLevels=False)
         self.ui.waterfall_widget.setYRange(0, WATERFALL_ROWS, padding=0)
@@ -59,10 +58,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.averaged_power_db = None
         self.ui.avg_cycle_btn.setText(f"FFT AVG\n平滑: {self.avg_lengths[self.avg_index]}")
         
-        # 初始化双旋钮的状态
-        self.last_coarse_dial_value = self.ui.coarse_dial.value()
-        self.last_fine_dial_value = self.ui.fine_dial.value()
-
         self.bind_events()
         
         self.ui.plot_widget.setMouseEnabled(x=True, y=False)
@@ -83,11 +78,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         rect = QtCore.QRectF(min_f, 0, sr_mhz, WATERFALL_ROWS)
         self.ui.waterfall_image.setRect(rect)
 
-    def format_freq_display(self, hz):
-        """格式化巨型管的数字显示： 000.000 MHz"""
-        mhz = hz / 1e6
-        return f"{mhz:07.3f} MHz"
-
     def initialize_hardware_state(self):
         try:
             self.sdr_freq_hz = self.backend.get_sdr_freq()
@@ -106,57 +96,37 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.ui.waterfall_widget.setXRange(min_f, max_f, padding=0)
             
             self.update_waterfall_rect()
-            
             self.ui.center_line.setValue(tmhz)
             self.update_filter_region(tmhz)
-            self.ui.freq_label.setText(self.format_freq_display(self.target_freq_hz))
+            
+            # 将硬件频率同步到数字面板
+            self.ui.freq_display.set_freq(self.target_freq_hz)
             
             self.updating_view = False 
         except Exception as e: pass
 
     def bind_events(self):
-        self.ui.set_freq_btn.clicked.connect(self.on_set_frequency_clicked)
+        # 绑定全新的交互式频率拖拽信号
+        self.ui.freq_display.sig_step_requested.connect(self.on_freq_step_requested)
+        
         self.ui.avg_cycle_btn.clicked.connect(self.cycle_averaging)
-        
-        self.ui.coarse_dial.valueChanged.connect(self.on_coarse_dial_rotated)
-        self.ui.fine_dial.valueChanged.connect(self.on_fine_dial_rotated)
-        
         self.ui.center_line.sigDragged.connect(self.on_line_dragged)
         self.ui.center_line.sigPositionChangeFinished.connect(self.on_line_dropped)
-        
         self.ui.tuning_mode_btn.clicked.connect(self.toggle_tuning_mode)
         self.ui.config_btn.clicked.connect(self.open_config_dialog)
         self.ui.demod_config_btn.clicked.connect(self.open_demod_config_dialog)
-        
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
 
-    # ================= 旋钮逻辑核心 =================
-    def on_coarse_dial_rotated(self, value):
-        delta = value - self.last_coarse_dial_value
-        if delta > 180: delta -= 360
-        elif delta < -180: delta += 360
-        self.last_coarse_dial_value = value
-        if delta == 0: return
-
-        step_hz = delta * 100e3 
+    # ================= 交互式面板核心逻辑 =================
+    def on_freq_step_requested(self, delta_hz):
+        """处理面板上数字被左右拖拽时发出的步进请求"""
         if self.tuning_mode == "CENTRAL":
-            self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + step_hz)
+            # 中央调谐：平移整个频谱底图
+            self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + delta_hz)
         else:
-            self.safe_shift_sdr_only(self.sdr_freq_hz + step_hz)
-
-    def on_fine_dial_rotated(self, value):
-        delta = value - self.last_fine_dial_value
-        if delta > 180: delta -= 360
-        elif delta < -180: delta += 360
-        self.last_fine_dial_value = value
-        if delta == 0: return
-
-        step_hz = delta * 5e3 
-        if self.tuning_mode == "CENTRAL":
-            self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + step_hz)
-        else:
-            self.safe_set_target_freq(self.target_freq_hz + step_hz)
+            # 自由调谐：仅在画面内移动目标红线
+            self.safe_set_target_freq(self.target_freq_hz + delta_hz)
 
     # ================= 前端与解调弹窗配置 =================
     def open_demod_config_dialog(self):
@@ -193,11 +163,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.backend.set_demod_mode(idx)
             
         self.update_filter_region()
-
         self.backend.set_squelch(self.cur_squelch)
         self.backend.set_audio_value(self.cur_audio_value)
         self.backend.set_filter_bw(new_mode, new_low, new_high)
-
         self.demod_dialog.hide()
 
     def open_config_dialog(self):
@@ -289,7 +257,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.target_freq_hz = target_hz
             self.ui.center_line.setValue(new_clamped_mhz)
             self.update_filter_region(new_clamped_mhz)
-            self.ui.freq_label.setText(self.format_freq_display(target_hz))
+            
+            self.ui.freq_display.set_freq(target_hz)
             
             self.updating_view = True
             self.ui.waterfall_widget.setXRange(view_range[0], view_range[1], padding=0)
@@ -327,35 +296,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.update_waterfall_rect()
             self.ui.center_line.setValue(mhz)
             self.update_filter_region(mhz)
-            self.ui.freq_label.setText(self.format_freq_display(clamped_hz))
-            self.updating_view = False
-        except Exception: pass
-
-    def safe_shift_sdr_only(self, target_hz):
-        clamped_hz = max(MIN_FREQ_HZ, min(MAX_FREQ_HZ, target_hz))
-        mhz = clamped_hz / 1e6
-        try:
-            self.backend.set_sdr_freq(clamped_hz)
-            self.sdr_freq_hz = clamped_hz
             
-            bw = self.cur_sr_mhz * 1e6 / 2.0
-            if self.target_freq_hz < clamped_hz - bw or self.target_freq_hz > clamped_hz + bw:
-                new_tar = max(clamped_hz - bw, min(clamped_hz + bw, self.target_freq_hz))
-                self.backend.set_target_freq(new_tar)
-                self.target_freq_hz = new_tar
-                tmhz = new_tar / 1e6
-                self.ui.center_line.setValue(tmhz)
-                self.update_filter_region(tmhz)
-                self.ui.freq_label.setText(self.format_freq_display(new_tar))
-
-            self.averaged_power_db = None  
-            
-            self.updating_view = True
-            min_f = self.base_freqs[0] + mhz
-            max_f = self.base_freqs[-1] + mhz
-            self.ui.plot_widget.setXRange(min_f, max_f, padding=0)
-            self.ui.waterfall_widget.setXRange(min_f, max_f, padding=0)
-            self.update_waterfall_rect()
+            self.ui.freq_display.set_freq(clamped_hz)
             self.updating_view = False
         except Exception: pass
 
@@ -368,7 +310,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             tmhz = clamped_hz / 1e6
             self.ui.center_line.setValue(tmhz)
             self.update_filter_region(tmhz)
-            self.ui.freq_label.setText(self.format_freq_display(clamped_hz))
+            self.ui.freq_display.set_freq(clamped_hz)
         except Exception: pass
 
     def on_line_dragged(self):
@@ -376,21 +318,13 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.is_dragging = True
             target_freq_mhz = self.ui.center_line.value()
             self.update_filter_region(target_freq_mhz)
-            self.ui.freq_label.setText(self.format_freq_display(target_freq_mhz * 1e6))
+            self.ui.freq_display.set_freq(target_freq_mhz * 1e6)
 
     def on_line_dropped(self):
         if self.tuning_mode == "FREE":
             self.is_dragging = False
             target_hz = self.ui.center_line.value() * 1e6
             self.safe_set_target_freq(target_hz)
-
-    def on_set_frequency_clicked(self):
-        try:
-            target_hz = float(self.ui.freq_input.text()) * 1e6 
-            self.safe_set_sdr_and_target_freq(target_hz)
-            self.ui.freq_input.clear()
-        except ValueError:
-            QtWidgets.QMessageBox.warning(self, "错误", "请输入有效的数字 (如 97.4)")
 
     def sync_status(self):
         try:
@@ -405,7 +339,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 if abs(current_view_center - (self.sdr_freq_hz / 1e6)) > 0.1: 
                     self.safe_set_sdr_and_target_freq(self.sdr_freq_hz)
 
-                self.ui.freq_label.setText(self.format_freq_display(self.target_freq_hz))
+                self.ui.freq_display.set_freq(self.target_freq_hz)
         except Exception: pass 
 
     def update_plot(self):
@@ -427,8 +361,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             render_data = np.ascontiguousarray(self.waterfall_data.T)
             self.ui.waterfall_image.setImage(render_data, autoLevels=False)
 
-            # ================= 驱动 S-Meter =================
-            # 找到目标频率在当前频谱 X 轴中最接近的索引点，提取其 dB 值
             target_mhz = self.target_freq_hz / 1e6
             idx = (np.abs(current_x - target_mhz)).argmin()
             s_meter_val = self.averaged_power_db[idx]
