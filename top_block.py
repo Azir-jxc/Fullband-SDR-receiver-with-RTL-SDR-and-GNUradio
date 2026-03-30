@@ -84,8 +84,8 @@ class top_block(gr.top_block, Qt.QWidget):
         ##################################################
         # Variables
         ##################################################
-        self.target_freq = target_freq = 28e6
-        self.sdr_freq = sdr_freq = 28e6
+        self.target_freq = target_freq = 94.5e6
+        self.sdr_freq = sdr_freq = 94.5e6
         self.wfm_co_freq = wfm_co_freq = 7.5e4
         self.usb_co_freq_low = usb_co_freq_low = 0.2e3
         self.usb_co_freq_high = usb_co_freq_high = 2.8e3
@@ -109,7 +109,7 @@ class top_block(gr.top_block, Qt.QWidget):
         ##################################################
         # Blocks
         ##################################################
-        self._sdr_freq_range = Range(28e6, 1.7e9, 100e3, 28e6, 200)
+        self._sdr_freq_range = Range(28e6, 1.7e9, 100e3, 94.5e6, 200)
         self._sdr_freq_win = RangeWidget(self._sdr_freq_range, self.set_sdr_freq, 'sdr_freq', "counter_slider", float)
         self.top_grid_layout.addWidget(self._sdr_freq_win, 4, 3, 1, 1)
         for r in range(4, 5):
@@ -221,6 +221,7 @@ class top_block(gr.top_block, Qt.QWidget):
         self.blocks_selector_0_0.set_enabled(True)
         self.blocks_selector_0 = blocks.selector(gr.sizeof_gr_complex*1,0,demod_mode)
         self.blocks_selector_0.set_enabled(True)
+        self.blocks_multiply_xx_1_0 = blocks.multiply_vff(1)
         self.blocks_multiply_xx_1 = blocks.multiply_vcc(1)
         self.blocks_complex_to_real_0_0 = blocks.complex_to_real(1)
         self.blocks_complex_to_real_0 = blocks.complex_to_real(1)
@@ -260,22 +261,21 @@ class top_block(gr.top_block, Qt.QWidget):
         	tau=75e-6,
         	max_dev=5.0e3,
           )
+        self.analog_const_source_x_0 = analog.sig_source_f(0, analog.GR_CONST_WAVE, 0, 0, audio_value)
         self.analog_am_demod_cf_0 = analog.am_demod_cf(
         	channel_rate=sdr_samp_rate/50,
         	audio_decim=1,
         	audio_pass=5000,
         	audio_stop=5500,
         )
-        self.analog_agc_xx_0_0_0 = analog.agc_ff(1e-3, audio_value, 1.0)
-        self.analog_agc_xx_0_0_0.set_max_gain(65536)
 
 
 
         ##################################################
         # Connections
         ##################################################
-        self.connect((self.analog_agc_xx_0_0_0, 0), (self.audio_sink_0, 0))
         self.connect((self.analog_am_demod_cf_0, 0), (self.blocks_selector_0_0, 0))
+        self.connect((self.analog_const_source_x_0, 0), (self.blocks_multiply_xx_1_0, 1))
         self.connect((self.analog_nbfm_rx_0, 0), (self.blocks_selector_0_0, 1))
         self.connect((self.analog_sig_source_x_1, 0), (self.blocks_multiply_xx_1, 1))
         self.connect((self.analog_simple_squelch_cc_1, 0), (self.analog_nbfm_rx_0, 0))
@@ -288,12 +288,13 @@ class top_block(gr.top_block, Qt.QWidget):
         self.connect((self.blocks_complex_to_real_0, 0), (self.blocks_selector_0_0, 3))
         self.connect((self.blocks_complex_to_real_0_0, 0), (self.blocks_selector_0_0, 4))
         self.connect((self.blocks_multiply_xx_1, 0), (self.low_pass_filter_0_0_0, 0))
+        self.connect((self.blocks_multiply_xx_1_0, 0), (self.audio_sink_0, 0))
         self.connect((self.blocks_selector_0, 3), (self.band_pass_filter_0, 0))
         self.connect((self.blocks_selector_0, 4), (self.band_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 1), (self.low_pass_filter_0, 0))
         self.connect((self.blocks_selector_0, 0), (self.low_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 2), (self.low_pass_filter_0_1, 0))
-        self.connect((self.blocks_selector_0_0, 0), (self.analog_agc_xx_0_0_0, 0))
+        self.connect((self.blocks_selector_0_0, 0), (self.blocks_multiply_xx_1_0, 0))
         self.connect((self.blocks_stream_to_vector_0, 0), (self.fft_vxx_0, 0))
         self.connect((self.blocks_stream_to_vector_0_0, 0), (self.zeromq_pub_sink_0_0, 0))
         self.connect((self.fft_vxx_0, 0), (self.zeromq_pub_sink_0, 0))
@@ -461,7 +462,7 @@ class top_block(gr.top_block, Qt.QWidget):
 
     def set_audio_value(self, audio_value):
         self.audio_value = audio_value
-        self.analog_agc_xx_0_0_0.set_reference(self.audio_value)
+        self.analog_const_source_x_0.set_offset(self.audio_value)
 
     def get_am_co_freq(self):
         return self.am_co_freq

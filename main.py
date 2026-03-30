@@ -16,16 +16,13 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.setup_ui(self)
         self.backend = RadioBackend()
         
-        # --- 核心状态变量 ---
         self.tuning_mode = "CENTRAL" 
         self.sdr_freq_hz = 0.0       
         self.target_freq_hz = 0.0    
         
-        # --- 渲染控制锁 ---
         self.updating_view = False       
         self.pause_plot_update = False   
         
-        # --- 前端配置状态缓存 ---
         self.cur_rf_gain = 20
         self.cur_if_gain = 20
         self.cur_bb_gain = 20
@@ -33,19 +30,20 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.cur_samp_mode = "正交采样 (Quadrature)"
         self.config_dialog = None 
 
-        # --- 解调与AGC状态缓存 ---
         self.demod_dialog = None
-        self.spectrum_dialog = None  # 新增的频谱弹窗实例
+        self.spectrum_dialog = None 
         self.cur_demod_mode = "WFM"  
         self.cur_squelch = -70
         self.cur_audio_value = 0.4   
 
-        # --- 数据与内存初始化 ---
+        self.grid_enabled = True 
+
         self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/SAMPLE_RATE)) / 1e6
         self.waterfall_data = np.full((WATERFALL_ROWS, FFT_SIZE), -100.0)
         self.ui.waterfall_image.setImage(np.ascontiguousarray(self.waterfall_data.T), autoLevels=False)
         self.ui.waterfall_widget.setYRange(0, WATERFALL_ROWS, padding=0)
 
+        self._init_custom_grid() 
         self.initialize_hardware_state()
 
         self.drag_tune_timer = QtCore.QTimer()
@@ -58,7 +56,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.alpha = 2.0 / (self.avg_lengths[self.avg_index] + 1.0)
         self.averaged_power_db = None
         
-        self.update_status_badges() # 初始化时刷新顶栏状态
+        self.update_status_badges() 
         self.bind_events()
         
         self.ui.plot_widget.setMouseEnabled(x=True, y=False)
@@ -72,8 +70,56 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.sync_timer.timeout.connect(self.sync_status)
         self.sync_timer.start(1000) 
 
+    def _init_custom_grid(self):
+        self.grid_lines_x = []
+        self.grid_lines_y = []
+        pen_grid = pg.mkPen(color=(255, 255, 255, 40), width=1, style=QtCore.Qt.DashLine)
+        
+        for y in range(-100, -20, 20):
+            line = pg.InfiniteLine(angle=0, movable=False, pen=pen_grid)
+            line.setPos(y)
+            self.ui.plot_widget.addItem(line)
+            self.grid_lines_y.append(line)
+            
+        for _ in range(30):
+            line = pg.InfiniteLine(angle=90, movable=False, pen=pen_grid)
+            self.ui.plot_widget.addItem(line)
+            self.grid_lines_x.append(line)
+
+    def update_grid_overlay(self):
+        if self.cur_sr_mhz >= 2.4: spacing = 0.5
+        elif self.cur_sr_mhz >= 2.0: spacing = 0.4
+        else: spacing = 0.2
+
+        self.ui.lbl_scale.setText(f"{spacing} MHz / Div")
+        
+        view_range = self.ui.plot_widget.viewRange()[0]
+        left_f = view_range[0]
+        right_f = view_range[1]
+        
+        self.ui.lbl_left_freq.setText(f"{left_f:.3f} MHz")
+        self.ui.lbl_right_freq.setText(f"{right_f:.3f} MHz")
+
+        for line in self.grid_lines_y:
+            line.setVisible(self.grid_enabled)
+            
+        if not self.grid_enabled:
+            for line in self.grid_lines_x:
+                line.setVisible(False)
+            return
+
+        start_x = np.ceil(left_f / spacing) * spacing
+        x_pos = start_x
+        
+        for line in self.grid_lines_x:
+            if x_pos <= right_f:
+                line.setPos(x_pos)
+                line.setVisible(True)
+                x_pos += spacing
+            else:
+                line.setVisible(False)
+
     def update_status_badges(self):
-        """全面刷新顶部指示灯"""
         self.ui.lbl_mod.setText(f"MOD: {self.cur_demod_mode}")
         self.ui.lbl_tune.setText("TUNE: FREE" if self.tuning_mode == "FREE" else "TUNE: CENT")
         
@@ -85,13 +131,16 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.lbl_sr.setText(f"SR: {self.cur_sr_mhz}M")
         self.ui.lbl_sql.setText(f"SQL: {self.cur_squelch}")
         self.ui.lbl_avg.setText(f"AVG: {self.avg_lengths[self.avg_index]}")
-        # AGC 固定 OFF 显示
 
     def update_waterfall_rect(self):
         mhz = self.sdr_freq_hz / 1e6
-        sr_mhz = self.cur_sr_mhz
-        min_f = mhz - (sr_mhz / 2.0)
-        rect = QtCore.QRectF(min_f, 0, sr_mhz, WATERFALL_ROWS)
+        # === 核心对齐修复 3：精确的非对称底图边框 ===
+        # fftfreq 的生成特性决定了它并不是完美居中的。
+        # 用绝对边界宽度取代直接传入 sr_mhz，根除 0.002M 的偏移
+        min_f = self.base_freqs[0] + mhz
+        max_f = self.base_freqs[-1] + mhz
+        width = max_f - min_f
+        rect = QtCore.QRectF(min_f, 0, width, WATERFALL_ROWS)
         self.ui.waterfall_image.setRect(rect)
 
     def initialize_hardware_state(self):
@@ -106,16 +155,19 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             tmhz = self.target_freq_hz / 1e6
             
             self.updating_view = True 
+            
+            # 使用精确的阵列极值来设定屏幕 ViewBox 的边界
             min_f = self.base_freqs[0] + mhz
             max_f = self.base_freqs[-1] + mhz
+            
             self.ui.plot_widget.setXRange(min_f, max_f, padding=0)
-            self.ui.waterfall_widget.setXRange(min_f, max_f, padding=0)
             
             self.update_waterfall_rect()
             self.ui.center_line.setValue(tmhz)
             self.update_filter_region(tmhz)
             self.ui.freq_display.set_freq(self.target_freq_hz)
             
+            self.update_grid_overlay() 
             self.updating_view = False 
         except Exception as e: pass
 
@@ -124,7 +176,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.center_line.sigDragged.connect(self.on_line_dragged)
         self.ui.center_line.sigPositionChangeFinished.connect(self.on_line_dropped)
         
-        # 绑定右上角的三个按钮
         self.ui.demod_config_btn.clicked.connect(self.open_demod_config_dialog)
         self.ui.config_btn.clicked.connect(self.open_config_dialog)
         self.ui.spectrum_config_btn.clicked.connect(self.open_spectrum_config_dialog)
@@ -138,35 +189,35 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         else:
             self.safe_set_target_freq(self.target_freq_hz + delta_hz)
 
-    # ================= 新增：频谱与调谐设置弹窗 =================
     def open_spectrum_config_dialog(self):
         if self.spectrum_dialog is None:
             from ui_layout import SpectrumConfigDialog
             cur_avg_str = str(self.avg_lengths[self.avg_index])
-            self.spectrum_dialog = SpectrumConfigDialog(self, self.tuning_mode, cur_avg_str)
+            self.spectrum_dialog = SpectrumConfigDialog(self, self.tuning_mode, cur_avg_str, self.grid_enabled)
             self.spectrum_dialog.apply_btn.clicked.connect(self.apply_spectrum_config)
             self.spectrum_dialog.close_btn.clicked.connect(self.spectrum_dialog.hide)
             
         self.spectrum_dialog.tune_combo.setCurrentIndex(0 if self.tuning_mode == "CENTRAL" else 1)
         self.spectrum_dialog.avg_combo.setCurrentText(str(self.avg_lengths[self.avg_index]))
+        self.spectrum_dialog.grid_combo.setCurrentIndex(0 if self.grid_enabled else 1)
         self.spectrum_dialog.show()
         self.spectrum_dialog.raise_()
 
     def apply_spectrum_config(self):
         if not self.spectrum_dialog: return
         
-        # 应用调谐模式
         new_tune_idx = self.spectrum_dialog.tune_combo.currentIndex()
         new_tune = "CENTRAL" if new_tune_idx == 0 else "FREE"
         
-        # 应用 FFT 平滑
         new_avg_str = self.spectrum_dialog.avg_combo.currentText()
         self.avg_index = self.avg_lengths.index(int(new_avg_str))
         length = self.avg_lengths[self.avg_index]
         self.alpha = 1.0 if length == 1 else 2.0 / (length + 1.0)
         self.averaged_power_db = None 
 
-        # 如果调谐模式切换了，需要重设图表交互属性
+        grid_idx = self.spectrum_dialog.grid_combo.currentIndex()
+        self.grid_enabled = (grid_idx == 0)
+
         if self.tuning_mode != new_tune:
             self.tuning_mode = new_tune
             if self.tuning_mode == "FREE":
@@ -178,9 +229,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 self.safe_set_sdr_and_target_freq(self.target_freq_hz)
                 
         self.update_status_badges()
+        self.update_grid_overlay() 
         self.spectrum_dialog.hide()
 
-    # ================= 解调与射频弹窗 =================
     def open_demod_config_dialog(self):
         if self.demod_dialog is None:
             from ui_layout import DemodConfigDialog
@@ -266,7 +317,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.update_status_badges()
         self.config_dialog.hide()
 
-    # ================= 业务逻辑与交互 =================
     def update_filter_region(self, center_freq_mhz=None):
         if center_freq_mhz is None: center_freq_mhz = self.ui.center_line.value()
         _, low_hz, high_hz = DEMOD_MODES[self.cur_demod_mode]
@@ -281,6 +331,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 self.safe_set_target_freq(clicked_freq_hz)
 
     def on_xrange_changed(self, view_box, view_range):
+        self.update_grid_overlay() 
+        
         if self.tuning_mode == "CENTRAL" and not self.updating_view:
             self.pause_plot_update = True 
             
@@ -295,7 +347,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.ui.freq_display.set_freq(target_hz)
             
             self.updating_view = True
-            self.ui.waterfall_widget.setXRange(view_range[0], view_range[1], padding=0)
             self.update_waterfall_rect() 
             self.updating_view = False
             
@@ -323,10 +374,11 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.averaged_power_db = None  
             
             self.updating_view = True
+            
             min_f = self.base_freqs[0] + mhz
             max_f = self.base_freqs[-1] + mhz
+            
             self.ui.plot_widget.setXRange(min_f, max_f, padding=0)
-            self.ui.waterfall_widget.setXRange(min_f, max_f, padding=0)
             self.update_waterfall_rect()
             self.ui.center_line.setValue(mhz)
             self.update_filter_region(mhz)

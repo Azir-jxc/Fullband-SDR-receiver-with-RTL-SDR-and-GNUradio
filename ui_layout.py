@@ -1,6 +1,7 @@
 # ui_layout.py
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
+import numpy as np
 from config import *
 
 # ================= 全局暗黑专业仪器 QSS 样式 =================
@@ -61,7 +62,6 @@ QSpinBox, QDoubleSpinBox, QComboBox {
 }
 """
 
-# ================= 自定义交互式频率管组件 =================
 class DigitLabel(QtWidgets.QLabel):
     sig_stepped = QtCore.pyqtSignal(int)
     sig_selected = QtCore.pyqtSignal(int)
@@ -78,9 +78,9 @@ class DigitLabel(QtWidgets.QLabel):
     def set_selected(self, selected):
         base_style = "font-size: 56px; font-weight: bold; font-family: 'Consolas', monospace; border: none;"
         if selected:
-            self.setStyleSheet(f"{base_style} color: #000000; background-color: #00FFCC; border-radius: 6px;")
+            self.setStyleSheet(f"{base_style} color: #000000; background-color: #FFFF00; border-radius: 6px;")
         else:
-            self.setStyleSheet(f"{base_style} color: #00FFCC; background-color: transparent;")
+            self.setStyleSheet(f"{base_style} color: #FFFF00; background-color: transparent;")
 
     def mousePressEvent(self, event):
         self.drag_start_x = event.x()
@@ -114,14 +114,13 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         layout.setSpacing(0) 
         
         self.digits = []
-        
         self.add_digit(layout, 1000000000) 
         self.add_digit(layout, 100000000)  
         self.add_digit(layout, 10000000)   
         self.add_digit(layout, 1000000)    
         
         dot = QtWidgets.QLabel(".")
-        dot.setStyleSheet("color: #00FFCC; font-size: 56px; font-weight: bold; font-family: 'Consolas', monospace; border: none; background: transparent;")
+        dot.setStyleSheet("color: #FFFF00; font-size: 56px; font-weight: bold; font-family: 'Consolas', monospace; border: none; background: transparent;")
         dot.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignCenter)
         dot.setFixedSize(20, 70) 
         layout.addWidget(dot)
@@ -131,11 +130,10 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         self.add_digit(layout, 1000)       
         
         unit = QtWidgets.QLabel(" MHz")
-        unit.setStyleSheet("color: #00FFCC; font-size: 26px; font-weight: bold; border: none; background: transparent; padding-bottom: 12px;")
+        unit.setStyleSheet("color: #FFFF00; font-size: 26px; font-weight: bold; border: none; background: transparent; padding-bottom: 12px;")
         unit.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignLeft)
         unit.setFixedHeight(70)
         layout.addWidget(unit)
-        
         self.on_digit_selected(100000)
 
     def add_digit(self, layout, step_hz):
@@ -155,16 +153,12 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         val = int(round(hz / 1000)) 
         s = f"{val:07d}" 
         if len(s) > 7: s = s[-7:] 
-        
         for i, char in enumerate(s):
             if i < len(self.digits):
                 self.digits[i].setText(char)
 
-# ================= 弹窗组件类 =================
-
 class SpectrumConfigDialog(QtWidgets.QDialog):
-    """新增：频谱与调谐设置弹窗"""
-    def __init__(self, parent=None, cur_tune="CENTRAL", cur_avg="1"):
+    def __init__(self, parent=None, cur_tune="CENTRAL", cur_avg="1", grid_on=True):
         super().__init__(parent)
         self.setWindowTitle("频谱与调谐设置")
         self.setMinimumWidth(300)
@@ -191,6 +185,15 @@ class SpectrumConfigDialog(QtWidgets.QDialog):
         self.avg_combo.setMinimumHeight(35)
         avg_layout.addWidget(self.avg_combo)
         layout.addLayout(avg_layout)
+
+        grid_layout = QtWidgets.QHBoxLayout()
+        grid_layout.addWidget(QtWidgets.QLabel("背景网格:"))
+        self.grid_combo = QtWidgets.QComboBox()
+        self.grid_combo.addItems(["开启 (ON)", "关闭 (OFF)"])
+        self.grid_combo.setCurrentIndex(0 if grid_on else 1)
+        self.grid_combo.setMinimumHeight(35)
+        grid_layout.addWidget(self.grid_combo)
+        layout.addLayout(grid_layout)
 
         btn_layout = QtWidgets.QHBoxLayout()
         self.apply_btn = QtWidgets.QPushButton("应用")
@@ -320,7 +323,6 @@ class ConfigDialog(QtWidgets.QDialog):
 
 class Ui_MainWindow:
     def create_status_badge(self, text, color="#00FFCC"):
-        """边框颜色和字体颜色同步的指示灯"""
         lbl = QtWidgets.QLabel(text)
         lbl.setAlignment(QtCore.Qt.AlignCenter)
         lbl.setStyleSheet(f"background-color: #111111; color: {color}; border: 1px solid {color}; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; font-family: 'Consolas', monospace;")
@@ -334,16 +336,14 @@ class Ui_MainWindow:
         main_widget = QtWidgets.QWidget()
         window.setCentralWidget(main_widget)
         
-        # 整体采用上下垂直布局
         root_layout = QtWidgets.QVBoxLayout(main_widget)
         root_layout.setContentsMargins(10, 10, 10, 10)
         root_layout.setSpacing(10)
 
-        # ================= 1. 顶栏：左侧状态灯矩阵 + 右侧控制按钮 =================
+        # ================= 1. 顶栏 =================
         top_bar_layout = QtWidgets.QHBoxLayout()
         top_bar_layout.setSpacing(15)
         
-        # 状态灯布局
         status_layout = QtWidgets.QHBoxLayout()
         status_layout.setSpacing(8)
         self.lbl_mod = self.create_status_badge("MOD: WFM", "#00FFCC")
@@ -361,11 +361,9 @@ class Ui_MainWindow:
         status_layout.addWidget(self.lbl_sql)
         status_layout.addWidget(self.lbl_avg)
         status_layout.addWidget(self.lbl_agc)
-        
         top_bar_layout.addLayout(status_layout)
-        top_bar_layout.addStretch() # 把两拨人往左右两侧推开
+        top_bar_layout.addStretch() 
         
-        # 右侧按钮组 (三个弹窗入口)
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.setSpacing(8)
         self.demod_config_btn = QtWidgets.QPushButton("解调设置")
@@ -375,21 +373,18 @@ class Ui_MainWindow:
         btn_layout.addWidget(self.demod_config_btn)
         btn_layout.addWidget(self.config_btn)
         btn_layout.addWidget(self.spectrum_config_btn)
-        
         top_bar_layout.addLayout(btn_layout)
         root_layout.addLayout(top_bar_layout)
 
-        # ================= 2. 下方主内容：独占全宽的图形区 =================
+        # ================= 2. 频率荧光管与 S-Meter =================
         main_content_layout = QtWidgets.QVBoxLayout()
         
-        # 交互式数字荧光屏 
         freq_layout = QtWidgets.QHBoxLayout()
         self.freq_display = InteractiveFreqDisplay()
         freq_layout.addWidget(self.freq_display)
-        freq_layout.addStretch() # 保证频率屏居左不拉伸
+        freq_layout.addStretch() 
         main_content_layout.addLayout(freq_layout)
 
-        # S-Meter (信号强度指示条)
         self.s_meter = QtWidgets.QProgressBar()
         self.s_meter.setRange(-100, 0)
         self.s_meter.setValue(-100)
@@ -397,16 +392,30 @@ class Ui_MainWindow:
         self.s_meter.setFixedHeight(20)
         main_content_layout.addWidget(self.s_meter)
 
-        # 无边框绘图区
+        # ================= 3. 数据视图区 =================
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
         pg.setConfigOption('background', '#000000')
         pg.setConfigOption('foreground', '#666666')
         
+        small_font = QtGui.QFont('Consolas', 8)
+        
+        # --- A. 频谱图区 ---
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.hideAxis('left')
         self.plot_widget.hideAxis('bottom')
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.2)
-        self.plot_widget.setYRange(-100, 10)
+        self.plot_widget.showAxis('right')
+        
+        spec_right_axis = self.plot_widget.getAxis('right')
+        spec_right_axis.setTickSpacing(20, 10) 
+        
+        spec_right_axis.setWidth(28) 
+        spec_right_axis.setStyle(tickTextOffset=1)
+        spec_right_axis.setTickFont(small_font)
+        
+        spec_right_axis.setTextPen('#888888')
+        spec_right_axis.setPen('#555555')
+        
+        self.plot_widget.setYRange(-100, -30, padding=0)
         self.plot_widget.setMenuEnabled(False)
 
         pen_red_line = pg.mkPen(color='#FF1744', width=2)
@@ -419,23 +428,103 @@ class Ui_MainWindow:
         self.plot_widget.addItem(self.filter_region)
 
         self.curve = self.plot_widget.plot(pen=pg.mkPen(color='#FFD700', width=2.5))
-        self.splitter.addWidget(self.plot_widget)
+        
+        self.plot_container = QtWidgets.QWidget()
+        overlay_layout = QtWidgets.QGridLayout(self.plot_container)
+        
+        # === 核心对齐修复 1：边距全清零！===
+        # 彻底移除会挤压图表变形的外部 Margin，让 plot_widget 和 waterfall_container 一样宽
+        overlay_layout.setContentsMargins(0, 0, 0, 0) 
+        
+        overlay_layout.addWidget(self.plot_widget, 0, 0, 3, 3) 
+        
+        # === 核心对齐修复 2：用 CSS Padding 给标签加边距 ===
+        # 基础样式增加了 padding，防止文字紧贴容器边缘
+        osd_style_left = "color: rgba(255, 255, 255, 140); font-family: 'Consolas', monospace; font-size: 13px; font-weight: bold; background: transparent; padding: 5px;"
+        # 右侧的标签增加右 Padding 躲开 28px 的坐标轴
+        osd_style_right = "color: rgba(255, 255, 255, 140); font-family: 'Consolas', monospace; font-size: 13px; font-weight: bold; background: transparent; padding: 5px; padding-right: 35px;"
+        
+        self.lbl_scale = QtWidgets.QLabel("0.5 MHz / Div")
+        self.lbl_scale.setStyleSheet(osd_style_right)
+        self.lbl_left_freq = QtWidgets.QLabel("---.--- MHz")
+        self.lbl_left_freq.setStyleSheet(osd_style_left)
+        self.lbl_right_freq = QtWidgets.QLabel("---.--- MHz")
+        self.lbl_right_freq.setStyleSheet(osd_style_right)
 
+        overlay_layout.addWidget(self.lbl_scale, 0, 2, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
+        overlay_layout.addWidget(self.lbl_left_freq, 2, 0, QtCore.Qt.AlignBottom | QtCore.Qt.AlignLeft)
+        overlay_layout.addWidget(self.lbl_right_freq, 2, 2, QtCore.Qt.AlignBottom | QtCore.Qt.AlignRight)
+        
+        overlay_layout.setRowStretch(1, 1)
+        overlay_layout.setColumnStretch(1, 1)
+        self.splitter.addWidget(self.plot_container)
+
+        # --- B. 瀑布图与独立色卡区 ---
+        self.waterfall_container = QtWidgets.QWidget()
+        wf_layout = QtWidgets.QHBoxLayout(self.waterfall_container)
+        wf_layout.setContentsMargins(0, 0, 0, 0)
+        wf_layout.setSpacing(0)
+        
         self.waterfall_widget = pg.PlotWidget()
         self.waterfall_widget.hideAxis('left')
         self.waterfall_widget.hideAxis('bottom')
         self.waterfall_widget.setMouseEnabled(x=False, y=False)
         self.waterfall_widget.setMenuEnabled(False)
         
+        # ==== 终极对齐锁 ====
+        # 强制瀑布图底层 X 轴追踪频谱图的 X 轴，只要上下两图物理宽度一致，就永远不会错位
+        self.waterfall_widget.setXLink(self.plot_widget) 
+        
+        pos = np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        colors = np.array([
+            [0, 0, 20, 255],       
+            [0, 0, 220, 255],      
+            [0, 200, 200, 255],    
+            [0, 210, 0, 255],      
+            [255, 220, 0, 255],    
+            [180, 0, 0, 255]       
+        ], dtype=np.ubyte)
+        sdr_cmap = pg.ColorMap(pos, colors)
+        
         self.waterfall_image = pg.ImageItem()
         self.waterfall_widget.addItem(self.waterfall_image)
+        self.waterfall_image.setLookupTable(sdr_cmap.getLookupTable())
+        self.waterfall_image.setLevels([-100, -30]) 
         
-        colormap = pg.colormap.get('viridis')
-        self.waterfall_image.setLookupTable(colormap.getLookupTable())
-        self.waterfall_image.setLevels([-100, 0]) 
+        self.colorbar_widget = pg.PlotWidget()
+        self.colorbar_widget.setFixedWidth(28) 
+        self.colorbar_widget.hideAxis('left')
+        self.colorbar_widget.hideAxis('bottom')
+        self.colorbar_widget.showAxis('right')
+        self.colorbar_widget.setMouseEnabled(x=False, y=False)
+        self.colorbar_widget.setMenuEnabled(False)
+        self.colorbar_widget.setYRange(-100, -30, padding=0)
+        self.colorbar_widget.setXRange(0, 1, padding=0)
         
-        self.splitter.addWidget(self.waterfall_widget)
-        self.splitter.setSizes([300, 300]) # 因为全宽了，图表可以更大
+        cb_axis = self.colorbar_widget.getAxis('right')
+        cb_axis.setTickSpacing(20, 10)
+        
+        cb_axis.setWidth(18) 
+        cb_axis.setStyle(tickTextOffset=1)
+        cb_axis.setTickFont(small_font)
+        
+        cb_axis.setTextPen('#888888')
+        cb_axis.setPen('#555555')
+        
+        lut = sdr_cmap.getLookupTable()
+        channels = lut.shape[1] 
+        cb_data = np.zeros((1, lut.shape[0], channels), dtype=np.uint8)
+        cb_data[0, :, :] = lut
+        cb_image = pg.ImageItem()
+        cb_image.setImage(cb_data)
+        cb_image.setRect(QtCore.QRectF(0, -100, 1, 70))
+        self.colorbar_widget.addItem(cb_image)
+        
+        wf_layout.addWidget(self.waterfall_widget)
+        wf_layout.addWidget(self.colorbar_widget)
+        
+        self.splitter.addWidget(self.waterfall_container)
+        self.splitter.setSizes([150, 450]) 
         
         main_content_layout.addWidget(self.splitter)
         root_layout.addLayout(main_content_layout)

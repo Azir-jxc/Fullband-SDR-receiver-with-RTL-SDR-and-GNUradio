@@ -41,7 +41,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2909, 68]
+    coordinate: [1999, 95]
     rotation: 0
     state: true
 - name: audio_value
@@ -53,7 +53,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3966, 386]
+    coordinate: [3113, 519]
     rotation: 0
     state: true
 - name: demod_mode
@@ -65,7 +65,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2414, 396]
+    coordinate: [1504, 423]
     rotation: 0
     state: true
 - name: dev_args
@@ -125,7 +125,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2910, 599]
+    coordinate: [2000, 626]
     rotation: 0
     state: true
 - name: lsb_co_freq_low
@@ -137,7 +137,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2904, 694]
+    coordinate: [1994, 721]
     rotation: 0
     state: true
 - name: nfm_co_freq
@@ -149,7 +149,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2880, 203]
+    coordinate: [1970, 230]
     rotation: 0
     state: true
 - name: offset_freq
@@ -161,7 +161,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [998, 588]
+    coordinate: [840, 550]
     rotation: 0
     state: true
 - name: receive_width
@@ -173,7 +173,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1609, 387]
+    coordinate: [1229, 369]
     rotation: 0
     state: true
 - name: samp_rate
@@ -200,7 +200,7 @@ blocks:
     start: 28e6
     step: 100e3
     stop: 1.7e9
-    value: 28e6
+    value: 94.5e6
     widget: counter_slider
   states:
     bus_sink: false
@@ -230,7 +230,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2999, 18]
+    coordinate: [2089, 45]
     rotation: 0
     state: true
 - name: syn_mode
@@ -249,7 +249,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: 28e6
+    value: 94.5e6
   states:
     bus_sink: false
     bus_source: false
@@ -266,7 +266,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2903, 524]
+    coordinate: [1993, 551]
     rotation: 0
     state: true
 - name: usb_co_freq_low
@@ -278,7 +278,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2891, 448]
+    coordinate: [1981, 475]
     rotation: 0
     state: true
 - name: wfm_co_freq
@@ -290,7 +290,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2899, 333]
+    coordinate: [1989, 360]
     rotation: 0
     state: true
 - name: analog_agc_xx_0
@@ -323,16 +323,16 @@ blocks:
     max_gain: '65536'
     maxoutbuf: '0'
     minoutbuf: '0'
-    rate: 1e-3
+    rate: 6e-4
     reference: audio_value
     type: float
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3951, 266]
+    coordinate: [2919, 215]
     rotation: 0
-    state: enabled
+    state: disabled
 - name: analog_agc_xx_0_2
   id: analog_agc_xx
   parameters:
@@ -369,9 +369,26 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3153, 29]
+    coordinate: [2243, 56]
     rotation: 0
     state: enabled
+- name: analog_const_source_x_0
+  id: analog_const_source_x
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    const: audio_value
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    type: float
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2825, 491]
+    rotation: 0
+    state: true
 - name: analog_nbfm_rx_0
   id: analog_nbfm_rx
   parameters:
@@ -388,7 +405,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3351, 227]
+    coordinate: [2398, 243]
     rotation: 0
     state: enabled
 - name: analog_sig_source_x_0
@@ -432,7 +449,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [904, 449]
+    coordinate: [746, 411]
     rotation: 0
     state: true
 - name: analog_simple_squelch_cc_0
@@ -466,7 +483,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3104, 245]
+    coordinate: [2194, 272]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_2
@@ -483,7 +500,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3083, 355]
+    coordinate: [2173, 382]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_3
@@ -500,7 +517,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3054, 490]
+    coordinate: [2144, 517]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_4
@@ -517,7 +534,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3103, 587]
+    coordinate: [2193, 614]
     rotation: 0
     state: enabled
 - name: analog_wfm_rcv_0
@@ -534,7 +551,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3359, 353]
+    coordinate: [2389, 368]
     rotation: 0
     state: enabled
 - name: audio_sink_0
@@ -551,7 +568,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [4144, 295]
+    coordinate: [3200, 312]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0
@@ -576,7 +593,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2758, 448]
+    coordinate: [1848, 475]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0_0
@@ -601,7 +618,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2767, 613]
+    coordinate: [1857, 640]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_mag_0
@@ -633,7 +650,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3271, 481]
+    coordinate: [2361, 508]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_real_0_0
@@ -649,7 +666,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3271, 601]
+    coordinate: [2361, 628]
     rotation: 0
     state: enabled
 - name: blocks_keep_m_in_n_0
@@ -704,7 +721,25 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1184, 288]
+    coordinate: [962, 279]
+    rotation: 0
+    state: true
+- name: blocks_multiply_xx_1_0
+  id: blocks_multiply_xx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '2'
+    type: float
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2995, 316]
     rotation: 0
     state: true
 - name: blocks_selector_0
@@ -727,7 +762,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2400, 206]
+    coordinate: [1490, 233]
     rotation: 0
     state: true
 - name: blocks_selector_0_0
@@ -750,7 +785,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3742, 209]
+    coordinate: [2730, 236]
     rotation: 0
     state: true
 - name: blocks_stream_to_vector_0
@@ -786,7 +821,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [364, 393]
+    coordinate: [329, 395]
     rotation: 0
     state: true
 - name: dc_blocker_xx_0
@@ -849,7 +884,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2751, 169]
+    coordinate: [1841, 196]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_0
@@ -873,7 +908,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2769, 31]
+    coordinate: [1859, 58]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_0_0
@@ -897,7 +932,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1595, 241]
+    coordinate: [1215, 223]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_1
@@ -921,7 +956,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2753, 309]
+    coordinate: [1843, 336]
     rotation: 0
     state: enabled
 - name: qtgui_freq_sink_x_0
@@ -1471,7 +1506,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1033, 106]
+    coordinate: [872, 112]
     rotation: 0
     state: true
 - name: zeromq_pub_sink_0_0
@@ -1490,7 +1525,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [547, 366]
+    coordinate: [490, 373]
     rotation: 0
     state: true
 
@@ -1499,6 +1534,7 @@ connections:
 - [analog_agc_xx_0_0_0, '0', audio_sink_0, '0']
 - [analog_agc_xx_0_2, '0', audio_sink_0, '0']
 - [analog_am_demod_cf_0, '0', blocks_selector_0_0, '0']
+- [analog_const_source_x_0, '0', blocks_multiply_xx_1_0, '1']
 - [analog_nbfm_rx_0, '0', blocks_selector_0_0, '1']
 - [analog_sig_source_x_0, '0', blocks_multiply_xx_0, '1']
 - [analog_sig_source_x_1, '0', blocks_multiply_xx_1, '1']
@@ -1516,6 +1552,7 @@ connections:
 - [blocks_complex_to_real_0_0, '0', blocks_selector_0_0, '4']
 - [blocks_multiply_xx_0, '0', qtgui_freq_sink_x_0_0, '0']
 - [blocks_multiply_xx_1, '0', low_pass_filter_0_0_0, '0']
+- [blocks_multiply_xx_1_0, '0', audio_sink_0, '0']
 - [blocks_selector_0, '0', low_pass_filter_0_0, '0']
 - [blocks_selector_0, '1', low_pass_filter_0, '0']
 - [blocks_selector_0, '2', low_pass_filter_0_1, '0']
@@ -1523,6 +1560,7 @@ connections:
 - [blocks_selector_0, '4', band_pass_filter_0_0, '0']
 - [blocks_selector_0_0, '0', analog_agc_xx_0_0_0, '0']
 - [blocks_selector_0_0, '0', analog_agc_xx_0_2, '0']
+- [blocks_selector_0_0, '0', blocks_multiply_xx_1_0, '0']
 - [blocks_stream_to_vector_0, '0', fft_vxx_0, '0']
 - [blocks_stream_to_vector_0_0, '0', zeromq_pub_sink_0_0, '0']
 - [dc_blocker_xx_0, '0', analog_agc_xx_0, '0']
