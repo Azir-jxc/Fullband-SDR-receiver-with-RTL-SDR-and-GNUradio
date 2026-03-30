@@ -189,6 +189,18 @@ blocks:
     rotation: 0
     state: true
 - name: sdr_freq
+  id: variable
+  parameters:
+    comment: ''
+    value: 94.5e6
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [181, 491]
+    rotation: 0
+    state: true
+- name: sdr_freq
   id: variable_qtgui_range
   parameters:
     comment: ''
@@ -206,9 +218,9 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [6, 466]
+    coordinate: [85, 457]
     rotation: 0
-    state: true
+    state: disabled
 - name: sdr_samp_rate
   id: variable
   parameters:
@@ -1038,7 +1050,7 @@ blocks:
     bus_structure: null
     coordinate: [325, 12]
     rotation: 0
-    state: true
+    state: disabled
 - name: qtgui_freq_sink_x_0_0
   id: qtgui_freq_sink_x
   parameters:

@@ -470,6 +470,23 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.plot_timer.stop(); self.sync_timer.stop(); self.backend.close(); event.accept()
 
 if __name__ == '__main__':
+    import subprocess
+    import time
+    import os
+
+    # 1. 在后台启动 GNU Radio 底层进程
+    print("正在启动底层的 GNU Radio 进程...")
+    # 使用 sys.executable 确保使用当前环境的 Python 解释器
+    gr_process = subprocess.Popen(
+        [sys.executable, "top_block.py"],
+        stdout=subprocess.DEVNULL,  # 隐藏底层的标准输出，保持控制台干净 (可选)
+        stderr=subprocess.STDOUT
+    )
+
+    # 2. 给予 ZMQ 和 XMLRPC 服务短暂的启动时间，避免前端连接失败
+    time.sleep(2) 
+
+    # 3. 启动 PyQt5 前端 UI
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app = QtWidgets.QApplication(sys.argv)
@@ -480,4 +497,13 @@ if __name__ == '__main__':
     
     main_window = SpectrumAnalyzer()
     main_window.show()
-    sys.exit(app.exec_())
+    
+    # 4. 运行主循环，并捕获退出状态
+    exit_code = app.exec_()
+    
+    # 5. 清理工作：UI 关闭时，务必杀掉 GNU Radio 进程
+    print("正在关闭底层无线电进程...")
+    gr_process.terminate()
+    gr_process.wait()  # 等待进程彻底结束
+    
+    sys.exit(exit_code)
