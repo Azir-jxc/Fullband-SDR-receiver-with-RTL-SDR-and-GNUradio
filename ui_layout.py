@@ -26,7 +26,7 @@ QPushButton {
     padding: 8px 15px; 
 }
 QPushButton:pressed { 
-    background-color: #00FFCC; 
+    background-color: #FFFF00; 
     color: #000000; 
 }
 QProgressBar { 
@@ -62,6 +62,40 @@ QSpinBox, QDoubleSpinBox, QComboBox {
 }
 """
 
+# ================= 悬浮音量滑块组件 =================
+class VolumePopup(QtWidgets.QWidget):
+    sig_vol_changed = QtCore.pyqtSignal(float)
+
+    def __init__(self, parent=None, init_val=0.4):
+        super().__init__(parent, QtCore.Qt.Popup | QtCore.Qt.FramelessWindowHint | QtCore.Qt.NoDropShadowWindowHint)
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        self.setFixedSize(50, 160)
+        
+        self.container = QtWidgets.QFrame(self)
+        self.container.setGeometry(0, 0, 50, 160)
+        self.container.setStyleSheet("QFrame { background-color: rgba(20,20,20,230); border: 1px solid #555; border-radius: 8px; }")
+        
+        layout = QtWidgets.QVBoxLayout(self.container)
+        layout.setContentsMargins(5, 15, 5, 15)
+        
+        self.slider = QtWidgets.QSlider(QtCore.Qt.Vertical)
+        self.slider.setRange(0, 8)
+        self.slider.setValue(int(init_val * 10))
+        
+        self.slider.setStyleSheet("""
+            QSlider::groove:vertical { background: #444; width: 6px; border-radius: 3px; }
+            QSlider::handle:vertical { background: #FFFF00; height: 16px; margin: 0 -6px; border-radius: 8px; }
+            QSlider::add-page:vertical { background: #FFFF00; width: 6px; border-radius: 3px; } 
+            QSlider::sub-page:vertical { background: #444; width: 6px; border-radius: 3px; }    
+        """)
+        self.slider.valueChanged.connect(self.on_slide)
+        layout.addWidget(self.slider, alignment=QtCore.Qt.AlignHCenter)
+
+    def on_slide(self, val):
+        real_val = 0.0 if val == 0 else val / 10.0
+        self.sig_vol_changed.emit(real_val)
+
+# ================= 自定义交互式频率管组件 =================
 class DigitLabel(QtWidgets.QLabel):
     sig_stepped = QtCore.pyqtSignal(int)
     sig_selected = QtCore.pyqtSignal(int)
@@ -204,10 +238,10 @@ class SpectrumConfigDialog(QtWidgets.QDialog):
         layout.addLayout(btn_layout)
 
 class DemodConfigDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None, cur_mode="WFM", cur_low=-75000, cur_high=75000, cur_squelch=-70, cur_audio_value=0.4):
+    def __init__(self, parent=None, cur_mode="WFM", cur_low=-75000, cur_high=75000, cur_squelch=-70):
         super().__init__(parent)
         self.setWindowTitle("解调与接收配置")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(350)
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool)
         self.setStyleSheet(DARK_STYLE) 
         layout = QtWidgets.QVBoxLayout(self)
@@ -235,24 +269,16 @@ class DemodConfigDialog(QtWidgets.QDialog):
         self.high_spin.setValue(int(cur_high))
         filter_layout.addWidget(self.high_spin, 1, 1)
         layout.addWidget(filter_box)
-        agc_box = QtWidgets.QGroupBox("音频与静噪")
+        
+        agc_box = QtWidgets.QGroupBox("静噪门限")
         agc_layout = QtWidgets.QGridLayout(agc_box)
-        agc_layout.addWidget(QtWidgets.QLabel("静噪门限 (dB):"), 0, 0)
+        agc_layout.addWidget(QtWidgets.QLabel("静噪 (dB):"), 0, 0)
         self.squelch_spin = QtWidgets.QSpinBox()
         self.squelch_spin.setRange(-150, 0)
         self.squelch_spin.setValue(int(cur_squelch))
         agc_layout.addWidget(self.squelch_spin, 0, 1)
-        agc_layout.addWidget(QtWidgets.QLabel("音量 (VOL):"), 1, 0)
-        self.audio_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.audio_slider.setRange(0, 8)
-        init_val = 0 if cur_audio_value == 0 else int(cur_audio_value * 10)
-        self.audio_slider.setValue(init_val)
-        self.audio_label = QtWidgets.QLabel(f"{cur_audio_value:.1f}")
-        self.audio_label.setMinimumWidth(30)
-        self.audio_slider.valueChanged.connect(self.on_audio_slide)
-        agc_layout.addWidget(self.audio_slider, 1, 1)
-        agc_layout.addWidget(self.audio_label, 1, 2)
         layout.addWidget(agc_box)
+        
         btn_layout = QtWidgets.QHBoxLayout()
         self.apply_btn = QtWidgets.QPushButton("应用配置")
         self.apply_btn.setStyleSheet("background-color: #0078D7; color: white;")
@@ -262,9 +288,6 @@ class DemodConfigDialog(QtWidgets.QDialog):
         layout.addLayout(btn_layout)
         self.mode_combo.currentIndexChanged.connect(self.auto_update_filter_bounds)
 
-    def on_audio_slide(self, val):
-        real_val = 0.0 if val == 0 else val / 10.0
-        self.audio_label.setText(f"{real_val:.1f}")
     def auto_update_filter_bounds(self):
         mode = self.mode_combo.currentText()
         if mode in DEMOD_MODES:
@@ -376,13 +399,36 @@ class Ui_MainWindow:
         top_bar_layout.addLayout(btn_layout)
         root_layout.addLayout(top_bar_layout)
 
-        # ================= 2. 频率荧光管与 S-Meter =================
+        # ================= 2. 频率管与【唯一】音量按钮 =================
         main_content_layout = QtWidgets.QVBoxLayout()
         
         freq_layout = QtWidgets.QHBoxLayout()
         self.freq_display = InteractiveFreqDisplay()
         freq_layout.addWidget(self.freq_display)
+        
+        # 将音量按钮推向最右侧
         freq_layout.addStretch() 
+
+        # ！！！ 这是全屏唯一的音量按钮，放置在频率显示区的右边 ！！！
+        self.vol_btn = QtWidgets.QPushButton("音量")
+        self.vol_btn.setFixedSize(65, 36) 
+        self.vol_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        self.vol_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1E1E1E;
+                color: #E0E0E0;
+                border: 1px solid #555;
+                border-radius: 6px;
+                font-family: 'Microsoft YaHei', sans-serif;
+                font-size: 15px;
+                font-weight: bold;
+                margin-right: 10px;
+            }
+            QPushButton:hover { color: #FFFF00; border: 1px solid #FFFF00; }
+            QPushButton:pressed { background-color: #FFFF00; color: #000000; }
+        """)
+        freq_layout.addWidget(self.vol_btn, alignment=QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
+        
         main_content_layout.addLayout(freq_layout)
 
         self.s_meter = QtWidgets.QProgressBar()
@@ -432,16 +478,10 @@ class Ui_MainWindow:
         self.plot_container = QtWidgets.QWidget()
         overlay_layout = QtWidgets.QGridLayout(self.plot_container)
         
-        # === 核心对齐修复 1：边距全清零！===
-        # 彻底移除会挤压图表变形的外部 Margin，让 plot_widget 和 waterfall_container 一样宽
         overlay_layout.setContentsMargins(0, 0, 0, 0) 
-        
         overlay_layout.addWidget(self.plot_widget, 0, 0, 3, 3) 
         
-        # === 核心对齐修复 2：用 CSS Padding 给标签加边距 ===
-        # 基础样式增加了 padding，防止文字紧贴容器边缘
         osd_style_left = "color: rgba(255, 255, 255, 140); font-family: 'Consolas', monospace; font-size: 13px; font-weight: bold; background: transparent; padding: 5px;"
-        # 右侧的标签增加右 Padding 躲开 28px 的坐标轴
         osd_style_right = "color: rgba(255, 255, 255, 140); font-family: 'Consolas', monospace; font-size: 13px; font-weight: bold; background: transparent; padding: 5px; padding-right: 35px;"
         
         self.lbl_scale = QtWidgets.QLabel("0.5 MHz / Div")
@@ -451,6 +491,7 @@ class Ui_MainWindow:
         self.lbl_right_freq = QtWidgets.QLabel("---.--- MHz")
         self.lbl_right_freq.setStyleSheet(osd_style_right)
 
+        # ！！！彻底移除了这里多余的按钮，只保留 OSD 文字标签！！！
         overlay_layout.addWidget(self.lbl_scale, 0, 2, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
         overlay_layout.addWidget(self.lbl_left_freq, 2, 0, QtCore.Qt.AlignBottom | QtCore.Qt.AlignLeft)
         overlay_layout.addWidget(self.lbl_right_freq, 2, 2, QtCore.Qt.AlignBottom | QtCore.Qt.AlignRight)
@@ -470,9 +511,6 @@ class Ui_MainWindow:
         self.waterfall_widget.hideAxis('bottom')
         self.waterfall_widget.setMouseEnabled(x=False, y=False)
         self.waterfall_widget.setMenuEnabled(False)
-        
-        # ==== 终极对齐锁 ====
-        # 强制瀑布图底层 X 轴追踪频谱图的 X 轴，只要上下两图物理宽度一致，就永远不会错位
         self.waterfall_widget.setXLink(self.plot_widget) 
         
         pos = np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])

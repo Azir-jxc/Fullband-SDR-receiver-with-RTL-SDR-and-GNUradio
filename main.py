@@ -32,6 +32,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
         self.demod_dialog = None
         self.spectrum_dialog = None 
+        self.vol_popup = None            # 保存悬浮音量弹窗实例
         self.cur_demod_mode = "WFM"  
         self.cur_squelch = -70
         self.cur_audio_value = 0.4   
@@ -134,9 +135,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
     def update_waterfall_rect(self):
         mhz = self.sdr_freq_hz / 1e6
-        # === 核心对齐修复 3：精确的非对称底图边框 ===
-        # fftfreq 的生成特性决定了它并不是完美居中的。
-        # 用绝对边界宽度取代直接传入 sr_mhz，根除 0.002M 的偏移
         min_f = self.base_freqs[0] + mhz
         max_f = self.base_freqs[-1] + mhz
         width = max_f - min_f
@@ -156,7 +154,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             
             self.updating_view = True 
             
-            # 使用精确的阵列极值来设定屏幕 ViewBox 的边界
             min_f = self.base_freqs[0] + mhz
             max_f = self.base_freqs[-1] + mhz
             
@@ -180,6 +177,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.config_btn.clicked.connect(self.open_config_dialog)
         self.ui.spectrum_config_btn.clicked.connect(self.open_spectrum_config_dialog)
         
+        # 绑定点击小喇叭事件
+        self.ui.vol_btn.clicked.connect(self.show_vol_popup)
+        
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
 
@@ -188,6 +188,24 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + delta_hz)
         else:
             self.safe_set_target_freq(self.target_freq_hz + delta_hz)
+
+    # ================= 悬浮音量弹窗逻辑 =================
+    def show_vol_popup(self):
+        if self.vol_popup is None:
+            from ui_layout import VolumePopup
+            self.vol_popup = VolumePopup(self, self.cur_audio_value)
+            self.vol_popup.sig_vol_changed.connect(self.on_volume_changed)
+        
+        # 计算弹出位置：精确位于喇叭按钮正下方居中对齐
+        btn_pos = self.ui.vol_btn.mapToGlobal(QtCore.QPoint(0, self.ui.vol_btn.height() + 8))
+        btn_pos.setX(btn_pos.x() - (self.vol_popup.width() - self.ui.vol_btn.width()) // 2)
+        
+        self.vol_popup.move(btn_pos)
+        self.vol_popup.show()
+
+    def on_volume_changed(self, val):
+        self.cur_audio_value = val
+        self.backend.set_audio_value(val)
 
     def open_spectrum_config_dialog(self):
         if self.spectrum_dialog is None:
@@ -238,7 +256,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             _, cur_low, cur_high = DEMOD_MODES[self.cur_demod_mode]
 
             self.demod_dialog = DemodConfigDialog(
-                self, self.cur_demod_mode, cur_low, cur_high, self.cur_squelch, self.cur_audio_value
+                self, self.cur_demod_mode, cur_low, cur_high, self.cur_squelch
             )
             self.demod_dialog.apply_btn.clicked.connect(self.apply_demod_config)
             self.demod_dialog.close_btn.clicked.connect(self.demod_dialog.hide)
@@ -255,9 +273,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         new_high = self.demod_dialog.high_spin.value()
         self.cur_squelch = self.demod_dialog.squelch_spin.value()
         
-        slider_val = self.demod_dialog.audio_slider.value()
-        self.cur_audio_value = 0.0 if slider_val == 0 else slider_val / 10.0
-        
         idx = DEMOD_MODES[new_mode][0]
         DEMOD_MODES[new_mode] = (idx, new_low, new_high)
         
@@ -267,7 +282,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             
         self.update_filter_region()
         self.backend.set_squelch(self.cur_squelch)
-        self.backend.set_audio_value(self.cur_audio_value)
         self.backend.set_filter_bw(new_mode, new_low, new_high)
         
         self.update_status_badges()
@@ -375,8 +389,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             
             self.updating_view = True
             
-            min_f = self.base_freqs[0] + mhz
-            max_f = self.base_freqs[-1] + mhz
+            half_bw = self.cur_sr_mhz / 2.0
+            min_f = mhz - half_bw
+            max_f = mhz + half_bw
             
             self.ui.plot_widget.setXRange(min_f, max_f, padding=0)
             self.update_waterfall_rect()
@@ -458,6 +473,10 @@ if __name__ == '__main__':
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app = QtWidgets.QApplication(sys.argv)
+    
+    font = app.font()
+    font.setPointSize(12)
+    app.setFont(font)
     
     main_window = SpectrumAnalyzer()
     main_window.show()
