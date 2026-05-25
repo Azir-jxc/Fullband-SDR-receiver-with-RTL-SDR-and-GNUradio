@@ -99,6 +99,7 @@ class VolumePopup(QtWidgets.QWidget):
 class DigitLabel(QtWidgets.QLabel):
     sig_stepped = QtCore.pyqtSignal(int)
     sig_selected = QtCore.pyqtSignal(int)
+    sig_double_clicked = QtCore.pyqtSignal() # 新增：双击信号
 
     def __init__(self, step_hz, parent=None):
         super().__init__(parent)
@@ -133,9 +134,15 @@ class DigitLabel(QtWidgets.QLabel):
         while self.drag_accum < -threshold:
             self.sig_stepped.emit(-1)
             self.drag_accum += threshold
+            
+    # 新增：捕获双击事件
+    def mouseDoubleClickEvent(self, event):
+        self.sig_double_clicked.emit()
+        super().mouseDoubleClickEvent(event)
 
 class InteractiveFreqDisplay(QtWidgets.QWidget):
     sig_step_requested = QtCore.pyqtSignal(float)
+    sig_double_clicked = QtCore.pyqtSignal() # 新增：汇总的双击信号
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -175,8 +182,14 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         lbl.setFixedSize(38, 70) 
         lbl.sig_selected.connect(self.on_digit_selected)
         lbl.sig_stepped.connect(lambda direction, step=step_hz: self.sig_step_requested.emit(direction * step))
+        lbl.sig_double_clicked.connect(self.sig_double_clicked.emit) # 新增：连接子控件的双击信号
         self.digits.append(lbl)
         layout.addWidget(lbl)
+
+    # 新增：点击频率管空白处也能触发双击
+    def mouseDoubleClickEvent(self, event):
+        self.sig_double_clicked.emit()
+        super().mouseDoubleClickEvent(event)
 
     def on_digit_selected(self, step_hz):
         for d in self.digits:
@@ -343,6 +356,72 @@ class ConfigDialog(QtWidgets.QDialog):
         parent_layout.addLayout(vbox)
         return slider, label
 
+# ================= 新增：自定义数字小键盘弹窗 =================
+class NumpadDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None, current_mhz=""):
+        super().__init__(parent)
+        self.setWindowTitle("输入频率 (MHz)")
+        self.setFixedSize(300, 380)
+        self.setStyleSheet(DARK_STYLE)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        self.display = QtWidgets.QLineEdit(str(current_mhz))
+        self.display.setReadOnly(True)
+        self.display.setAlignment(QtCore.Qt.AlignRight)
+        self.display.setStyleSheet("font-size: 28px; font-weight: bold; padding: 10px; background: #111; border: 1px solid #555; color: #00FFCC; font-family: 'Consolas';")
+        layout.addWidget(self.display)
+
+        grid = QtWidgets.QGridLayout()
+        grid.setSpacing(10)
+        
+        buttons = [
+            ('7', 0, 0), ('8', 0, 1), ('9', 0, 2),
+            ('4', 1, 0), ('5', 1, 1), ('6', 1, 2),
+            ('1', 2, 0), ('2', 2, 1), ('3', 2, 2),
+            ('.', 3, 0), ('0', 3, 1), ('删除', 3, 2),
+            ('取消', 4, 0), ('确认', 4, 1, 1, 2)
+        ]
+
+        for btn_info in buttons:
+            text = btn_info[0]
+            row = btn_info[1]
+            col = btn_info[2]
+            
+            btn = QtWidgets.QPushButton(text)
+            btn.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+            btn.setStyleSheet("font-size: 20px; font-weight: bold;")
+            btn.clicked.connect(lambda checked, t=text: self.on_button_clicked(t))
+            
+            if len(btn_info) == 5: # 跨列处理，如“确认”按钮
+                grid.addWidget(btn, row, col, btn_info[3], btn_info[4])
+            else:
+                grid.addWidget(btn, row, col)
+
+        layout.addLayout(grid)
+        layout.setStretchFactor(grid, 1)
+
+    def on_button_clicked(self, text):
+        current = self.display.text()
+        if text == '取消':
+            self.reject()
+        elif text == '确认':
+            if current:
+                self.accept()
+        elif text == '删除':
+            self.display.setText(current[:-1])
+        elif text == '.':
+            if '.' not in current:
+                self.display.setText(current + '.')
+        else:
+            self.display.setText(current + text)
+
+    def get_value(self):
+        try:
+            return float(self.display.text())
+        except ValueError:
+            return 0.0
 
 class Ui_MainWindow:
     def create_status_badge(self, text, color="#00FFCC"):

@@ -1,6 +1,7 @@
 options:
   parameters:
     author: ''
+    catch_exceptions: 'True'
     category: '[GRC Hier Blocks]'
     cmake_opt: ''
     comment: ''
@@ -8,7 +9,7 @@ options:
     description: ''
     gen_cmake: 'On'
     gen_linking: dynamic
-    generate_options: qt_gui
+    generate_options: no_gui
     hier_block_src_path: '.:'
     id: top_block
     max_nouts: '0'
@@ -41,7 +42,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1999, 95]
+    coordinate: [1440, 80.0]
     rotation: 0
     state: true
 - name: audio_value
@@ -53,7 +54,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3113, 519]
+    coordinate: [2192, 536.0]
     rotation: 0
     state: true
 - name: demod_mode
@@ -65,7 +66,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1504, 423]
+    coordinate: [1048, 424.0]
     rotation: 0
     state: true
 - name: dev_args
@@ -77,7 +78,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [271, 511]
+    coordinate: [16, 88.0]
     rotation: 0
     state: true
 - name: gain_bb
@@ -125,7 +126,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2000, 626]
+    coordinate: [1440, 608.0]
     rotation: 0
     state: true
 - name: lsb_co_freq_low
@@ -137,7 +138,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1994, 721]
+    coordinate: [1432, 704.0]
     rotation: 0
     state: true
 - name: nfm_co_freq
@@ -149,7 +150,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1970, 230]
+    coordinate: [1408, 216.0]
     rotation: 0
     state: true
 - name: offset_freq
@@ -161,7 +162,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [840, 550]
+    coordinate: [416, 544.0]
     rotation: 0
     state: true
 - name: receive_width
@@ -173,7 +174,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1229, 369]
+    coordinate: [664, 464.0]
     rotation: 0
     state: true
 - name: samp_rate
@@ -185,7 +186,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [107, 610]
+    coordinate: [2512, 224.0]
     rotation: 0
     state: true
 - name: sdr_freq
@@ -197,7 +198,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [181, 491]
+    coordinate: [160, 88.0]
     rotation: 0
     state: true
 - name: sdr_freq
@@ -207,7 +208,7 @@ blocks:
     gui_hint: 4,3,1,1
     label: ''
     min_len: '200'
-    orient: Qt.Vertical
+    orient: QtCore.Qt.Horizontal
     rangeType: float
     start: 28e6
     step: 100e3
@@ -242,7 +243,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2089, 45]
+    coordinate: [1528, 32.0]
     rotation: 0
     state: true
 - name: syn_mode
@@ -254,7 +255,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [622, 502]
+    coordinate: [328, 544.0]
     rotation: 0
     state: true
 - name: target_freq
@@ -266,7 +267,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [440, 504]
+    coordinate: [504, 552.0]
     rotation: 0
     state: true
 - name: usb_co_freq_high
@@ -278,7 +279,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1993, 551]
+    coordinate: [1432, 536.0]
     rotation: 0
     state: true
 - name: usb_co_freq_low
@@ -290,19 +291,19 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1981, 475]
+    coordinate: [1424, 456.0]
     rotation: 0
     state: true
 - name: wfm_co_freq
   id: variable
   parameters:
     comment: ''
-    value: 7.5e4
+    value: 12e4
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1989, 360]
+    coordinate: [1432, 344.0]
     rotation: 0
     state: true
 - name: analog_agc_xx_0
@@ -381,7 +382,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2243, 56]
+    coordinate: [1680, 40.0]
     rotation: 0
     state: enabled
 - name: analog_const_source_x_0
@@ -398,7 +399,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2825, 491]
+    coordinate: [2176, 480.0]
     rotation: 0
     state: true
 - name: analog_nbfm_rx_0
@@ -417,7 +418,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2398, 243]
+    coordinate: [1840, 224.0]
     rotation: 0
     state: enabled
 - name: analog_sig_source_x_0
@@ -433,6 +434,7 @@ blocks:
     offset: '0'
     phase: '0'
     samp_rate: sdr_samp_rate
+    showports: 'False'
     type: complex
     waveform: analog.GR_COS_WAVE
   states:
@@ -455,13 +457,14 @@ blocks:
     offset: '0'
     phase: '0'
     samp_rate: sdr_samp_rate
+    showports: 'False'
     type: complex
     waveform: analog.GR_COS_WAVE
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [746, 411]
+    coordinate: [344, 400.0]
     rotation: 0
     state: true
 - name: analog_simple_squelch_cc_0
@@ -495,7 +498,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2194, 272]
+    coordinate: [1632, 256.0]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_2
@@ -512,7 +515,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2173, 382]
+    coordinate: [1616, 368.0]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_3
@@ -529,7 +532,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2144, 517]
+    coordinate: [1584, 504.0]
     rotation: 0
     state: enabled
 - name: analog_simple_squelch_cc_4
@@ -546,7 +549,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2193, 614]
+    coordinate: [1632, 600.0]
     rotation: 0
     state: enabled
 - name: analog_wfm_rcv_0
@@ -563,7 +566,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2389, 368]
+    coordinate: [1832, 352.0]
     rotation: 0
     state: enabled
 - name: audio_sink_0
@@ -580,7 +583,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [3200, 312]
+    coordinate: [2504, 312.0]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0
@@ -600,12 +603,12 @@ blocks:
     samp_rate: sdr_samp_rate/10
     type: fir_filter_ccc
     width: '1000'
-    win: firdes.WIN_HAMMING
+    win: window.WIN_HAMMING
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1848, 475]
+    coordinate: [1288, 456.0]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0_0
@@ -625,12 +628,12 @@ blocks:
     samp_rate: sdr_samp_rate/10
     type: fir_filter_ccc
     width: '1000'
-    win: firdes.WIN_HAMMING
+    win: window.WIN_HAMMING
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1857, 640]
+    coordinate: [1296, 624.0]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_mag_0
@@ -662,7 +665,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2361, 508]
+    coordinate: [1800, 496.0]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_real_0_0
@@ -678,7 +681,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2361, 628]
+    coordinate: [1800, 608.0]
     rotation: 0
     state: enabled
 - name: blocks_keep_m_in_n_0
@@ -733,7 +736,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [962, 279]
+    coordinate: [640, 328.0]
     rotation: 0
     state: true
 - name: blocks_multiply_xx_1_0
@@ -751,7 +754,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2995, 316]
+    coordinate: [2344, 304.0]
     rotation: 0
     state: true
 - name: blocks_selector_0
@@ -774,7 +777,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1490, 233]
+    coordinate: [1032, 232.0]
     rotation: 0
     state: true
 - name: blocks_selector_0_0
@@ -797,7 +800,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2730, 236]
+    coordinate: [2080, 224.0]
     rotation: 0
     state: true
 - name: blocks_stream_to_vector_0
@@ -815,7 +818,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [371, 170]
+    coordinate: [424, 184.0]
     rotation: 0
     state: true
 - name: blocks_stream_to_vector_0_0
@@ -833,7 +836,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [329, 395]
+    coordinate: [424, 64.0]
     rotation: 0
     state: true
 - name: dc_blocker_xx_0
@@ -872,7 +875,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [569, 112]
+    coordinate: [640, 144.0]
     rotation: 0
     state: true
 - name: low_pass_filter_0
@@ -891,12 +894,12 @@ blocks:
     samp_rate: sdr_samp_rate/10
     type: fir_filter_ccf
     width: '5000'
-    win: firdes.WIN_HAMMING
+    win: window.WIN_HAMMING
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1841, 196]
+    coordinate: [1280, 184.0]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_0
@@ -915,12 +918,12 @@ blocks:
     samp_rate: sdr_samp_rate/10
     type: fir_filter_ccf
     width: '5000'
-    win: firdes.WIN_HAMMING
+    win: window.WIN_HAMMING
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1859, 58]
+    coordinate: [1296, 40.0]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_0_0
@@ -939,12 +942,12 @@ blocks:
     samp_rate: sdr_samp_rate
     type: fir_filter_ccf
     width: '5000'
-    win: firdes.WIN_HAMMING
+    win: window.WIN_HAMMING
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1215, 223]
+    coordinate: [784, 296.0]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_1
@@ -963,12 +966,12 @@ blocks:
     samp_rate: sdr_samp_rate/10
     type: fir_filter_ccf
     width: '25000'
-    win: firdes.WIN_HAMMING
+    win: window.WIN_HAMMING
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1843, 336]
+    coordinate: [1280, 320.0]
     rotation: 0
     state: enabled
 - name: qtgui_freq_sink_x_0
@@ -1023,6 +1026,7 @@ blocks:
     minoutbuf: '0'
     name: '""'
     nconnections: '1'
+    norm_window: 'False'
     showports: 'False'
     tr_chan: '0'
     tr_level: '0.0'
@@ -1041,7 +1045,7 @@ blocks:
     width7: '1'
     width8: '1'
     width9: '1'
-    wintype: firdes.WIN_BLACKMAN_hARRIS
+    wintype: window.WIN_BLACKMAN_hARRIS
     ymax: '10'
     ymin: '-140'
   states:
@@ -1103,6 +1107,7 @@ blocks:
     minoutbuf: '0'
     name: '"mixed"'
     nconnections: '1'
+    norm_window: 'False'
     showports: 'False'
     tr_chan: '0'
     tr_level: '0.0'
@@ -1121,7 +1126,7 @@ blocks:
     width7: '1'
     width8: '1'
     width9: '1'
-    wintype: firdes.WIN_BLACKMAN_hARRIS
+    wintype: window.WIN_BLACKMAN_hARRIS
     ymax: '10'
     ymin: '-140'
   states:
@@ -1499,7 +1504,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [7, 609]
+    coordinate: [16, 480.0]
     rotation: 0
     state: true
 - name: zeromq_pub_sink_0
@@ -1508,8 +1513,11 @@ blocks:
     address: tcp://127.0.0.1:5555
     affinity: ''
     alias: ''
+    bind: 'True'
     comment: ''
+    drop_on_hwm: 'True'
     hwm: '-1'
+    key: ''
     pass_tags: 'False'
     timeout: '100'
     type: complex
@@ -1518,7 +1526,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [872, 112]
+    coordinate: [872, 136.0]
     rotation: 0
     state: true
 - name: zeromq_pub_sink_0_0
@@ -1527,8 +1535,11 @@ blocks:
     address: tcp://127.0.0.1:5556
     affinity: ''
     alias: ''
+    bind: 'True'
     comment: ''
+    drop_on_hwm: 'True'
     hwm: '-1'
+    key: ''
     pass_tags: 'False'
     timeout: '100'
     type: complex
@@ -1537,7 +1548,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [490, 373]
+    coordinate: [672, 0.0]
     rotation: 0
     state: true
 
@@ -1591,3 +1602,4 @@ connections:
 
 metadata:
   file_format: 1
+  grc_version: 3.10.6.0

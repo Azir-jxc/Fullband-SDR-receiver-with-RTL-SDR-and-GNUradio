@@ -170,6 +170,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
     def bind_events(self):
         self.ui.freq_display.sig_step_requested.connect(self.on_freq_step_requested)
+        # 绑定双击事件唤出数字小键盘
+        self.ui.freq_display.sig_double_clicked.connect(self.open_numpad_dialog)
+        
         self.ui.center_line.sigDragged.connect(self.on_line_dragged)
         self.ui.center_line.sigPositionChangeFinished.connect(self.on_line_dropped)
         
@@ -182,6 +185,23 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
+
+    # ================= 修改：打开数字小键盘 =================
+    def open_numpad_dialog(self):
+        from ui_layout import NumpadDialog
+        
+        # 直接传入空字符串，这样框里就是空的
+        dialog = NumpadDialog(self, "")
+        
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            new_mhz = dialog.get_value()
+            if new_mhz > 0:
+                new_hz = new_mhz * 1e6
+                # 使用统一的安全设置函数，确保符合当前调谐模式和频谱边界
+                if self.tuning_mode == "CENTRAL":
+                    self.safe_set_sdr_and_target_freq(new_hz)
+                else:
+                    self.safe_set_target_freq(new_hz)
 
     def on_freq_step_requested(self, delta_hz):
         if self.tuning_mode == "CENTRAL":

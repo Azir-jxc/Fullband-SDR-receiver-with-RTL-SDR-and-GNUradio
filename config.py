@@ -11,7 +11,7 @@ FFT_SIZE = 1024
 CALIBRATION_OFFSET = 0 
 
 # --- 接收机与 UI 参数 ---
-MIN_FREQ_HZ = 22e6    
+MIN_FREQ_HZ = 0.5e6    
 MAX_FREQ_HZ = 2000e6  
 WATERFALL_ROWS = 100  
 
