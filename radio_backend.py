@@ -71,18 +71,11 @@ class RadioBackend:
         try: self.gr_rpc.set_sdr_samp_rate(sr_hz)
         except Exception as e: print(f"采样率设置失败: {e}")
 
-    def set_direct_samp_mode(self, mode_idx):
-        try:
-            arg_str = f"rtl=0,direct_samp={mode_idx}"
-            self.gr_rpc.set_dev_args(arg_str) 
-        except Exception as e: print(f"直采模式设置失败: {e}")
-
     def set_squelch(self, squelch_db):
         try:
             self.gr_rpc.set_squelch(squelch_db)
         except Exception as e: print(f"设置静噪失败: {e}")
 
-    # ================= 关键修改：对接底层的 audio_value =================
     def set_audio_value(self, val):
         try:
             self.gr_rpc.set_audio_value(val)

@@ -32,8 +32,13 @@ import time
 
 class top_block(gr.top_block):
 
-    def __init__(self):
+    def __init__(self, direct_samp_mode=0):
         gr.top_block.__init__(self, "Top Block", catch_exceptions=True)
+
+        ##################################################
+        # Parameters
+        ##################################################
+        self.direct_samp_mode = direct_samp_mode
 
         ##################################################
         # Variables
@@ -55,7 +60,6 @@ class top_block(gr.top_block):
         self.gain_rf = gain_rf = 20
         self.gain_if = gain_if = 20
         self.gain_bb = gain_bb = 20
-        self.dev_args = dev_args = 'rtl=0,direct_samp=0'
         self.demod_mode = demod_mode = 2
         self.audio_value = audio_value = 0.4
         self.am_co_freq = am_co_freq = 5e3
@@ -72,7 +76,7 @@ class top_block(gr.top_block):
         self.xmlrpc_server_0_thread.daemon = True
         self.xmlrpc_server_0_thread.start()
         self.rtlsdr_source_0 = osmosdr.source(
-            args="numchan=" + str(1) + " " + dev_args
+            args="numchan=" + str(1) + " " + 'rtl=0,direct_samp=' + str(direct_samp_mode)
         )
         self.rtlsdr_source_0.set_time_unknown_pps(osmosdr.time_spec_t())
         self.rtlsdr_source_0.set_sample_rate(sdr_samp_rate)
@@ -214,6 +218,12 @@ class top_block(gr.top_block):
         self.connect((self.rtlsdr_source_0, 0), (self.blocks_stream_to_vector_0_0, 0))
 
 
+    def get_direct_samp_mode(self):
+        return self.direct_samp_mode
+
+    def set_direct_samp_mode(self, direct_samp_mode):
+        self.direct_samp_mode = direct_samp_mode
+
     def get_target_freq(self):
         return self.target_freq
 
@@ -342,12 +352,6 @@ class top_block(gr.top_block):
         self.gain_bb = gain_bb
         self.rtlsdr_source_0.set_bb_gain(self.gain_bb, 0)
 
-    def get_dev_args(self):
-        return self.dev_args
-
-    def set_dev_args(self, dev_args):
-        self.dev_args = dev_args
-
     def get_demod_mode(self):
         return self.demod_mode
 
@@ -372,9 +376,18 @@ class top_block(gr.top_block):
 
 
 
+def argument_parser():
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--direct-samp-mode", dest="direct_samp_mode", type=intx, default=0,
+        help="Set direct_samp_mode [default=%(default)r]")
+    return parser
+
 
 def main(top_block_cls=top_block, options=None):
-    tb = top_block_cls()
+    if options is None:
+        options = argument_parser().parse_args()
+    tb = top_block_cls(direct_samp_mode=options.direct_samp_mode)
 
     def sig_handler(sig=None, frame=None):
         tb.stop()

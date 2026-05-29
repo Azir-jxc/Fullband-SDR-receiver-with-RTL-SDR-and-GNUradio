@@ -1,5 +1,8 @@
 # main.py
 import sys
+import os
+import time
+import subprocess
 import numpy as np
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
@@ -14,7 +17,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.ui = Ui_MainWindow()
         self.ui.setup_ui(self)
-        self.backend = RadioBackend()
         
         self.tuning_mode = "CENTRAL" 
         self.sdr_freq_hz = 0.0       
@@ -32,12 +34,19 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
         self.demod_dialog = None
         self.spectrum_dialog = None 
-        self.vol_popup = None            # 保存悬浮音量弹窗实例
+        self.vol_popup = None            
         self.cur_demod_mode = "WFM"  
         self.cur_squelch = -70
         self.cur_audio_value = 0.4   
 
         self.grid_enabled = True 
+
+        # 初始化进程控制状态
+        self.gr_process = None
+        self.backend = None
+        
+        # 首次拉起底层进程 (默认模式 0)
+        self.restart_sdr_process(0)
 
         self.base_freqs = np.fft.fftshift(np.fft.fftfreq(FFT_SIZE, d=1/SAMPLE_RATE)) / 1e6
         self.waterfall_data = np.full((WATERFALL_ROWS, FFT_SIZE), -100.0)
@@ -70,6 +79,42 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.sync_timer = QtCore.QTimer()
         self.sync_timer.timeout.connect(self.sync_status)
         self.sync_timer.start(1000) 
+
+    # ================= 关键新增：静默重启底层进程 =================
+    def restart_sdr_process(self, mode_idx):
+        """杀掉旧进程并根据新的直采模式拉起新进程"""
+        print(f"[前端管控] 正在重启底层无线电进程，直采模式切换为: {mode_idx} ...")
+        
+        # 1. 如果有旧后端的通信连接，先断开
+        if self.backend:
+            try: self.backend.close()
+            except: pass
+            
+        # 2. 杀掉旧的 GNU Radio 进程以释放硬件 USB 占用
+        if self.gr_process:
+            self.gr_process.terminate()
+            self.gr_process.wait()
+            
+        # 3. 组装新命令并启动
+        cmd = [sys.executable, "top_block.py", "--direct-samp-mode", str(mode_idx)]
+        self.gr_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.STDOUT
+        )
+        
+        # 4. 等待硬件初始化及 XMLRPC 服务就绪
+        time.sleep(2)
+        
+        # 5. 重连后端大管家
+        self.backend = RadioBackend()
+        
+        # 6. 恢复之前的关键状态（频率和音量）
+        if self.target_freq_hz > 0:
+            self.safe_set_sdr_and_target_freq(self.target_freq_hz)
+        self.backend.set_audio_value(self.cur_audio_value)
+        print("[前端管控] 底层流图重启并重连完毕！")
+    # ==============================================================
 
     def _init_custom_grid(self):
         self.grid_lines_x = []
@@ -170,7 +215,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
     def bind_events(self):
         self.ui.freq_display.sig_step_requested.connect(self.on_freq_step_requested)
-        # 绑定双击事件唤出数字小键盘
         self.ui.freq_display.sig_double_clicked.connect(self.open_numpad_dialog)
         
         self.ui.center_line.sigDragged.connect(self.on_line_dragged)
@@ -180,24 +224,18 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.config_btn.clicked.connect(self.open_config_dialog)
         self.ui.spectrum_config_btn.clicked.connect(self.open_spectrum_config_dialog)
         
-        # 绑定点击小喇叭事件
         self.ui.vol_btn.clicked.connect(self.show_vol_popup)
         
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
 
-    # ================= 修改：打开数字小键盘 =================
     def open_numpad_dialog(self):
         from ui_layout import NumpadDialog
-        
-        # 直接传入空字符串，这样框里就是空的
         dialog = NumpadDialog(self, "")
-        
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             new_mhz = dialog.get_value()
             if new_mhz > 0:
                 new_hz = new_mhz * 1e6
-                # 使用统一的安全设置函数，确保符合当前调谐模式和频谱边界
                 if self.tuning_mode == "CENTRAL":
                     self.safe_set_sdr_and_target_freq(new_hz)
                 else:
@@ -209,14 +247,12 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         else:
             self.safe_set_target_freq(self.target_freq_hz + delta_hz)
 
-    # ================= 悬浮音量弹窗逻辑 =================
     def show_vol_popup(self):
         if self.vol_popup is None:
             from ui_layout import VolumePopup
             self.vol_popup = VolumePopup(self, self.cur_audio_value)
             self.vol_popup.sig_vol_changed.connect(self.on_volume_changed)
         
-        # 计算弹出位置：精确位于喇叭按钮正下方居中对齐
         btn_pos = self.ui.vol_btn.mapToGlobal(QtCore.QPoint(0, self.ui.vol_btn.height() + 8))
         btn_pos.setX(btn_pos.x() - (self.vol_popup.width() - self.ui.vol_btn.width()) // 2)
         
@@ -336,10 +372,12 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         new_mode_str = self.config_dialog.mode_combo.currentText()
         new_sr_mhz = float(new_sr_str)
         
+        # ================= 关键修改：触发硬重启 =================
         if new_mode_str != self.cur_samp_mode:
             self.cur_samp_mode = new_mode_str
             mode_idx = 0 if "正交" in new_mode_str else (1 if "I 通道" in new_mode_str else 2)
-            self.backend.set_direct_samp_mode(mode_idx)
+            self.restart_sdr_process(mode_idx) # 直接重启进程
+        # ==========================================================
             
         if new_sr_mhz != self.cur_sr_mhz:
             self.cur_sr_mhz = new_sr_mhz
@@ -487,26 +525,18 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.ui.s_meter.setValue(int(s_meter_val))
 
     def closeEvent(self, event):
-        self.plot_timer.stop(); self.sync_timer.stop(); self.backend.close(); event.accept()
+        """窗口关闭时彻底清理资源和进程"""
+        self.plot_timer.stop()
+        self.sync_timer.stop()
+        if self.backend:
+            self.backend.close()
+        if self.gr_process:
+            self.gr_process.terminate()
+            self.gr_process.wait()
+        event.accept()
 
 if __name__ == '__main__':
-    import subprocess
-    import time
-    import os
-
-    # 1. 在后台启动 GNU Radio 底层进程
-    print("正在启动底层的 GNU Radio 进程...")
-    # 使用 sys.executable 确保使用当前环境的 Python 解释器
-    gr_process = subprocess.Popen(
-        [sys.executable, "top_block.py"],
-        stdout=subprocess.DEVNULL,  # 隐藏底层的标准输出，保持控制台干净 (可选)
-        stderr=subprocess.STDOUT
-    )
-
-    # 2. 给予 ZMQ 和 XMLRPC 服务短暂的启动时间，避免前端连接失败
-    time.sleep(2) 
-
-    # 3. 启动 PyQt5 前端 UI
+    # 底部只需保留极简的 PyQt5 启动逻辑
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app = QtWidgets.QApplication(sys.argv)
@@ -518,12 +548,4 @@ if __name__ == '__main__':
     main_window = SpectrumAnalyzer()
     main_window.show()
     
-    # 4. 运行主循环，并捕获退出状态
-    exit_code = app.exec_()
-    
-    # 5. 清理工作：UI 关闭时，务必杀掉 GNU Radio 进程
-    print("正在关闭底层无线电进程...")
-    gr_process.terminate()
-    gr_process.wait()  # 等待进程彻底结束
-    
-    sys.exit(exit_code)
+    sys.exit(app.exec_())
