@@ -95,6 +95,103 @@ class VolumePopup(QtWidgets.QWidget):
         real_val = 0.0 if val == 0 else val / 10.0
         self.sig_vol_changed.emit(real_val)
 
+# ================= 自定义交互式数字调节组件（滑动与滚轮，带动态步进） =================
+class SwipeNumberWidget(QtWidgets.QLabel):
+    """自定义交互式数字调节组件：点击高亮，上下滑动/滚轮更改数值（支持动态步进）"""
+    valueChanged = QtCore.pyqtSignal(int)
+
+    def __init__(self, value, min_val, max_val, base_step=1, suffix="", dynamic_step=False, parent=None):
+        super().__init__(parent)
+        self.val = value
+        self.min_val = min_val
+        self.max_val = max_val
+        self.base_step = base_step
+        self.suffix = suffix
+        self.dynamic_step = dynamic_step  
+        
+        self.is_selected = False
+        self.drag_start_y = 0
+        self.accum_dy = 0
+        
+        self.setAlignment(QtCore.Qt.AlignCenter)
+        self.setCursor(QtCore.Qt.SizeVerCursor)
+        self.setFocusPolicy(QtCore.Qt.ClickFocus)  
+        self.setMinimumHeight(35)
+        
+        self.update_display()
+        self.update_style()
+        
+    def _get_current_step(self):
+        """根据当前数值的绝对值，动态计算步进大小"""
+        if not self.dynamic_step:
+            return self.base_step
+            
+        abs_val = abs(self.val)
+        if abs_val >= 10000:
+            dyn_step = 1000
+        elif abs_val >= 1000:
+            dyn_step = 100
+        elif abs_val >= 100:
+            dyn_step = 10
+        else:
+            dyn_step = 1
+            
+        return max(self.base_step, dyn_step)
+
+    def update_style(self):
+        if self.is_selected:
+            self.setStyleSheet("background-color: #FFFF00; color: #000000; border: 1px solid #FFFF00; border-radius: 4px; font-weight: bold; font-family: 'Consolas', monospace;")
+        else:
+            self.setStyleSheet("background-color: #1E1E1E; color: #E0E0E0; border: 1px solid #404040; border-radius: 4px; font-weight: bold; font-family: 'Consolas', monospace;")
+
+    def update_display(self):
+        self.setText(f"{self.val}{self.suffix}")
+
+    def value(self):
+        return self.val
+
+    def setValue(self, v):
+        v = max(self.min_val, min(self.max_val, v))
+        if v != self.val:
+            self.val = v
+            self.update_display()
+            self.valueChanged.emit(self.val)
+
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self.is_selected = True
+            self.update_style()
+            self.drag_start_y = event.y()
+            self.accum_dy = 0
+            self.setFocus()  
+        super().mousePressEvent(event)
+
+    def focusOutEvent(self, event):
+        self.is_selected = False
+        self.update_style()
+        super().focusOutEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if not self.is_selected:
+            return
+        dy = event.y() - self.drag_start_y
+        self.accum_dy += dy
+        self.drag_start_y = event.y()
+        
+        threshold = 6  
+        while self.accum_dy <= -threshold:  
+            self.setValue(self.val + self._get_current_step())
+            self.accum_dy += threshold
+        while self.accum_dy >= threshold:   
+            self.setValue(self.val - self._get_current_step())
+            self.accum_dy -= threshold
+
+    def wheelEvent(self, event):
+        if event.angleDelta().y() > 0:
+            self.setValue(self.val + self._get_current_step())
+        else:
+            self.setValue(self.val - self._get_current_step())
+
 # ================= 自定义交互式频率管组件 =================
 class DigitLabel(QtWidgets.QLabel):
     sig_stepped = QtCore.pyqtSignal(int)
@@ -202,6 +299,7 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
             if i < len(self.digits):
                 self.digits[i].setText(char)
 
+# ================= 频谱与调谐设置小窗 =================
 class SpectrumConfigDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, cur_tune="CENTRAL", cur_avg="1", grid_on=True):
         super().__init__(parent)
@@ -248,6 +346,7 @@ class SpectrumConfigDialog(QtWidgets.QDialog):
         btn_layout.addWidget(self.close_btn)
         layout.addLayout(btn_layout)
 
+# ================= 解调与接收配置小窗 =================
 class DemodConfigDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, cur_mode="WFM", cur_low=-75000, cur_high=75000, cur_squelch=-70):
         super().__init__(parent)
@@ -257,6 +356,7 @@ class DemodConfigDialog(QtWidgets.QDialog):
         self.setStyleSheet(DARK_STYLE) 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(15)
+        
         mode_layout = QtWidgets.QHBoxLayout()
         mode_layout.addWidget(QtWidgets.QLabel("解调模式:"))
         self.mode_combo = QtWidgets.QComboBox()
@@ -265,28 +365,26 @@ class DemodConfigDialog(QtWidgets.QDialog):
         self.mode_combo.setMinimumHeight(35)
         mode_layout.addWidget(self.mode_combo)
         layout.addLayout(mode_layout)
-        filter_box = QtWidgets.QGroupBox("滤波器带宽 (Hz)")
+        
+        filter_box = QtWidgets.QGroupBox("滤波器带宽")
         filter_layout = QtWidgets.QGridLayout(filter_box)
         filter_layout.addWidget(QtWidgets.QLabel("下限:"), 0, 0)
-        self.low_spin = QtWidgets.QSpinBox()
-        self.low_spin.setRange(-500000, 500000)
-        self.low_spin.setSingleStep(100)
-        self.low_spin.setValue(int(cur_low))
+        
+        # 使用带动态步进的 SwipeNumberWidget，大数值调节更丝滑
+        self.low_spin = SwipeNumberWidget(int(cur_low), -500000, 500000, 100, " Hz", dynamic_step=True)
         filter_layout.addWidget(self.low_spin, 0, 1)
+        
         filter_layout.addWidget(QtWidgets.QLabel("上限:"), 1, 0)
-        self.high_spin = QtWidgets.QSpinBox()
-        self.high_spin.setRange(-500000, 500000)
-        self.high_spin.setSingleStep(100)
-        self.high_spin.setValue(int(cur_high))
+        self.high_spin = SwipeNumberWidget(int(cur_high), -500000, 500000, 100, " Hz", dynamic_step=True)
         filter_layout.addWidget(self.high_spin, 1, 1)
         layout.addWidget(filter_box)
         
         agc_box = QtWidgets.QGroupBox("静噪门限")
         agc_layout = QtWidgets.QGridLayout(agc_box)
-        agc_layout.addWidget(QtWidgets.QLabel("静噪 (dB):"), 0, 0)
-        self.squelch_spin = QtWidgets.QSpinBox()
-        self.squelch_spin.setRange(-150, 0)
-        self.squelch_spin.setValue(int(cur_squelch))
+        agc_layout.addWidget(QtWidgets.QLabel("静噪:"), 0, 0)
+        
+        # 静噪数值小，不需要动态步进
+        self.squelch_spin = SwipeNumberWidget(int(cur_squelch), -150, 0, 1, " dB", dynamic_step=False)
         agc_layout.addWidget(self.squelch_spin, 0, 1)
         layout.addWidget(agc_box)
         
@@ -306,15 +404,17 @@ class DemodConfigDialog(QtWidgets.QDialog):
             self.low_spin.setValue(int(low))
             self.high_spin.setValue(int(high))
 
+# ================= 硬件射频前端小窗 (RTL-SDR V3 专属优化) =================
 class ConfigDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, cur_rf=20, cur_if=20, cur_bb=20, cur_sr="2.4", cur_mode="正交采样 (Quadrature)"):
         super().__init__(parent)
         self.setWindowTitle("硬件射频前端")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(350)
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool) 
         self.setStyleSheet(DARK_STYLE)
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(15)
+        
         sr_layout = QtWidgets.QHBoxLayout()
         sr_layout.addWidget(QtWidgets.QLabel("采样率 (MHz):"))
         self.sr_combo = QtWidgets.QComboBox()
@@ -323,17 +423,25 @@ class ConfigDialog(QtWidgets.QDialog):
         self.sr_combo.setMinimumHeight(35)
         sr_layout.addWidget(self.sr_combo)
         layout.addLayout(sr_layout)
+        
         mode_layout = QtWidgets.QHBoxLayout()
         mode_layout.addWidget(QtWidgets.QLabel("采样模式:"))
         self.mode_combo = QtWidgets.QComboBox()
+        # 兼容 RTL-SDR V3 的直接采样模式（Q通道听短波）
         self.mode_combo.addItems(["正交采样 (Quadrature)", "I 通道直采 (Direct I)", "Q 通道直采 (Direct Q)"])
         self.mode_combo.setCurrentText(cur_mode)
         self.mode_combo.setMinimumHeight(35)
         mode_layout.addWidget(self.mode_combo)
         layout.addLayout(mode_layout)
-        self.rf_slider, self.rf_label = self.create_slider("RF 增益", cur_rf, layout)
-        self.if_slider, self.if_label = self.create_slider("IF 增益", cur_if, layout)
-        self.bb_slider, self.bb_label = self.create_slider("BB 增益", cur_bb, layout)
+
+        # 【界面显示】：针对 RTL-SDR 仅开放总 RF 增益
+        self.rf_slider = self.create_swipe_number("RF 增益", cur_rf, layout)
+        
+        # 【幽灵组件】：创建 IF 和 BB 对象，但不放入布局中。
+        # 这样不会在界面显示多余的无效组件，同时也保证 main.py 中的信号连接逻辑不会崩溃报错。
+        self.if_slider = SwipeNumberWidget(cur_if, 0, 50, 1, " dB", dynamic_step=False)
+        self.bb_slider = SwipeNumberWidget(cur_bb, 0, 50, 1, " dB", dynamic_step=False)
+        
         btn_layout = QtWidgets.QHBoxLayout()
         self.apply_btn = QtWidgets.QPushButton("应用重启")
         self.apply_btn.setStyleSheet("background-color: #0078D7; color: white;")
@@ -342,18 +450,17 @@ class ConfigDialog(QtWidgets.QDialog):
         btn_layout.addWidget(self.close_btn)
         layout.addLayout(btn_layout)
 
-    def create_slider(self, name, default_val, parent_layout):
-        vbox = QtWidgets.QVBoxLayout()
-        label = QtWidgets.QLabel(f"{name}: {default_val} dB")
-        slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        slider.setRange(0, 50)
-        slider.setValue(default_val)
-        slider.valueChanged.connect(lambda v, l=label, n=name: l.setText(f"{n}: {v} dB"))
-        vbox.addWidget(label)
-        vbox.addWidget(slider)
-        parent_layout.addLayout(vbox)
-        return slider, label
+    def create_swipe_number(self, name, default_val, parent_layout):
+        hbox = QtWidgets.QHBoxLayout()
+        label = QtWidgets.QLabel(name)
+        swipe_num = SwipeNumberWidget(default_val, 0, 50, 1, " dB", dynamic_step=False)
+        
+        hbox.addWidget(label, stretch=1)
+        hbox.addWidget(swipe_num, stretch=2) 
+        parent_layout.addLayout(hbox)
+        return swipe_num
 
+# ================= 数字键盘输入对话框 =================
 class NumpadDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, current_mhz=""):
         super().__init__(parent)
@@ -420,6 +527,7 @@ class NumpadDialog(QtWidgets.QDialog):
         except ValueError:
             return 0.0
 
+# ================= 主窗口 UI 结构布局 =================
 class Ui_MainWindow:
     def create_status_badge(self, text, color="#00FFCC"):
         lbl = QtWidgets.QLabel(text)
@@ -429,7 +537,7 @@ class Ui_MainWindow:
 
     def setup_ui(self, window):
         window.setWindowTitle("Malachite-Style SDR")
-        window.resize(1024, 600) # 调回标准窗口高度
+        window.resize(1024, 600)
         window.setStyleSheet(DARK_STYLE) 
 
         main_widget = QtWidgets.QWidget()
@@ -482,11 +590,10 @@ class Ui_MainWindow:
         self.freq_display = InteractiveFreqDisplay()
         freq_layout.addWidget(self.freq_display)
         
-        # --- 新增：将音频频谱放在这里（替代原本的 stretch 空白区） ---
         self.audio_container = QtWidgets.QWidget()
-        self.audio_container.setFixedHeight(95) # 设定合适高度匹配左侧频率管
+        self.audio_container.setFixedHeight(95) 
         audio_layout = QtWidgets.QVBoxLayout(self.audio_container)
-        audio_layout.setContentsMargins(15, 0, 15, 0) # 左右稍微留出边距
+        audio_layout.setContentsMargins(15, 0, 15, 0) 
         audio_layout.setSpacing(2)
         
         lbl_audio_title = QtWidgets.QLabel(" 音频频谱 ")
@@ -503,7 +610,7 @@ class Ui_MainWindow:
         audio_axis_bottom.setTickFont(small_font)
         audio_axis_bottom.setTextPen('#888888')
         audio_axis_bottom.setPen('#555555')
-        audio_axis_bottom.setHeight(18) # 减少底部坐标轴占用的高度
+        audio_axis_bottom.setHeight(18) 
         
         audio_axis_left = self.audio_plot_widget.getAxis('left')
         audio_axis_left.setTickFont(small_font)
@@ -517,7 +624,6 @@ class Ui_MainWindow:
         self.audio_curve = self.audio_plot_widget.plot(pen=pg.mkPen(color='#8BC34A', width=1.5))
         audio_layout.addWidget(self.audio_plot_widget)
         
-        # 将音频频谱区域添加到顶栏，并让其自动填满剩余空间
         freq_layout.addWidget(self.audio_container, stretch=1) 
 
         self.vol_btn = QtWidgets.QPushButton("音量")
@@ -664,7 +770,6 @@ class Ui_MainWindow:
         wf_layout.addWidget(self.colorbar_widget)
         self.splitter.addWidget(self.waterfall_container)
 
-        # 恢复正常的二等分比例
         self.splitter.setSizes([150, 450]) 
         main_content_layout.addWidget(self.splitter)
         root_layout.addLayout(main_content_layout)

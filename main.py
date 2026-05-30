@@ -253,18 +253,18 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
 
     def open_numpad_dialog(self):
+        """双击调出的数字键盘，强制全局跳转硬件频率"""
         from ui_layout import NumpadDialog
         dialog = NumpadDialog(self, "")
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             new_mhz = dialog.get_value()
             if new_mhz > 0:
                 new_hz = new_mhz * 1e6
-                if self.tuning_mode == "CENTRAL":
-                    self.safe_set_sdr_and_target_freq(new_hz)
-                else:
-                    self.safe_set_target_freq(new_hz)
+                # 修改点：不再判断 tuning_mode，直接强制移动底层 SDR 硬件中心和解调目标
+                self.safe_set_sdr_and_target_freq(new_hz)
 
     def on_freq_step_requested(self, delta_hz):
+        """滚轮/滑动频率管，依然受调谐模式控制"""
         if self.tuning_mode == "CENTRAL":
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + delta_hz)
         else:
