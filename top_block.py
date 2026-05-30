@@ -126,8 +126,9 @@ class top_block(gr.top_block):
                 5000,
                 window.WIN_HAMMING,
                 6.76))
+        self.fft_vxx_0_0 = fft.fft_vfc(1024, True, window.blackmanharris(1024), True, 1)
         self.fft_vxx_0 = fft.fft_vcc(1024, True, window.blackmanharris(1024), True, 1)
-        self.blocks_stream_to_vector_0_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, 1024)
+        self.blocks_stream_to_vector_0_0 = blocks.stream_to_vector(gr.sizeof_float*1, 1024)
         self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, 1024)
         self.blocks_selector_0_0 = blocks.selector(gr.sizeof_float*1,demod_mode,0)
         self.blocks_selector_0_0.set_enabled(True)
@@ -162,8 +163,6 @@ class top_block(gr.top_block):
         	quad_rate=(sdr_samp_rate / 10),
         	audio_decimation=5,
         )
-        self.analog_simple_squelch_cc_4 = analog.simple_squelch_cc(squelch, 1)
-        self.analog_simple_squelch_cc_3 = analog.simple_squelch_cc(squelch, 1)
         self.analog_simple_squelch_cc_2 = analog.simple_squelch_cc(squelch, 1)
         self.analog_simple_squelch_cc_1 = analog.simple_squelch_cc(squelch, 1)
         self.analog_sig_source_x_1 = analog.sig_source_c(sdr_samp_rate, analog.GR_COS_WAVE, (-offset_freq), 1, 0, 0)
@@ -180,22 +179,23 @@ class top_block(gr.top_block):
         	audio_pass=5000,
         	audio_stop=5500,
         )
+        self.analog_agc_xx_1 = analog.agc_cc((625e-6), 1.0, 1.0)
+        self.analog_agc_xx_1.set_max_gain(65536)
 
 
         ##################################################
         # Connections
         ##################################################
+        self.connect((self.analog_agc_xx_1, 0), (self.blocks_selector_0, 0))
         self.connect((self.analog_am_demod_cf_0, 0), (self.blocks_selector_0_0, 0))
         self.connect((self.analog_const_source_x_0, 0), (self.blocks_multiply_xx_1_0, 1))
         self.connect((self.analog_nbfm_rx_0, 0), (self.blocks_selector_0_0, 1))
         self.connect((self.analog_sig_source_x_1, 0), (self.blocks_multiply_xx_1, 1))
         self.connect((self.analog_simple_squelch_cc_1, 0), (self.analog_nbfm_rx_0, 0))
         self.connect((self.analog_simple_squelch_cc_2, 0), (self.analog_wfm_rcv_0, 0))
-        self.connect((self.analog_simple_squelch_cc_3, 0), (self.blocks_complex_to_real_0, 0))
-        self.connect((self.analog_simple_squelch_cc_4, 0), (self.blocks_complex_to_real_0_0, 0))
         self.connect((self.analog_wfm_rcv_0, 0), (self.blocks_selector_0_0, 2))
-        self.connect((self.band_pass_filter_0, 0), (self.analog_simple_squelch_cc_3, 0))
-        self.connect((self.band_pass_filter_0_0, 0), (self.analog_simple_squelch_cc_4, 0))
+        self.connect((self.band_pass_filter_0, 0), (self.blocks_complex_to_real_0, 0))
+        self.connect((self.band_pass_filter_0_0, 0), (self.blocks_complex_to_real_0_0, 0))
         self.connect((self.blocks_complex_to_real_0, 0), (self.blocks_selector_0_0, 3))
         self.connect((self.blocks_complex_to_real_0_0, 0), (self.blocks_selector_0_0, 4))
         self.connect((self.blocks_multiply_xx_1, 0), (self.low_pass_filter_0_0_0, 0))
@@ -206,16 +206,17 @@ class top_block(gr.top_block):
         self.connect((self.blocks_selector_0, 0), (self.low_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 2), (self.low_pass_filter_0_1, 0))
         self.connect((self.blocks_selector_0_0, 0), (self.blocks_multiply_xx_1_0, 0))
+        self.connect((self.blocks_selector_0_0, 0), (self.blocks_stream_to_vector_0_0, 0))
         self.connect((self.blocks_stream_to_vector_0, 0), (self.fft_vxx_0, 0))
-        self.connect((self.blocks_stream_to_vector_0_0, 0), (self.zeromq_pub_sink_0_0, 0))
+        self.connect((self.blocks_stream_to_vector_0_0, 0), (self.fft_vxx_0_0, 0))
         self.connect((self.fft_vxx_0, 0), (self.zeromq_pub_sink_0, 0))
+        self.connect((self.fft_vxx_0_0, 0), (self.zeromq_pub_sink_0_0, 0))
         self.connect((self.low_pass_filter_0, 0), (self.analog_simple_squelch_cc_1, 0))
         self.connect((self.low_pass_filter_0_0, 0), (self.analog_am_demod_cf_0, 0))
-        self.connect((self.low_pass_filter_0_0_0, 0), (self.blocks_selector_0, 0))
+        self.connect((self.low_pass_filter_0_0_0, 0), (self.analog_agc_xx_1, 0))
         self.connect((self.low_pass_filter_0_1, 0), (self.analog_simple_squelch_cc_2, 0))
         self.connect((self.rtlsdr_source_0, 0), (self.blocks_multiply_xx_1, 0))
         self.connect((self.rtlsdr_source_0, 0), (self.blocks_stream_to_vector_0, 0))
-        self.connect((self.rtlsdr_source_0, 0), (self.blocks_stream_to_vector_0_0, 0))
 
 
     def get_direct_samp_mode(self):
@@ -273,8 +274,6 @@ class top_block(gr.top_block):
         self.squelch = squelch
         self.analog_simple_squelch_cc_1.set_threshold(self.squelch)
         self.analog_simple_squelch_cc_2.set_threshold(self.squelch)
-        self.analog_simple_squelch_cc_3.set_threshold(self.squelch)
-        self.analog_simple_squelch_cc_4.set_threshold(self.squelch)
 
     def get_sdr_samp_rate(self):
         return self.sdr_samp_rate

@@ -99,7 +99,7 @@ class VolumePopup(QtWidgets.QWidget):
 class DigitLabel(QtWidgets.QLabel):
     sig_stepped = QtCore.pyqtSignal(int)
     sig_selected = QtCore.pyqtSignal(int)
-    sig_double_clicked = QtCore.pyqtSignal() # 新增：双击信号
+    sig_double_clicked = QtCore.pyqtSignal()
 
     def __init__(self, step_hz, parent=None):
         super().__init__(parent)
@@ -135,14 +135,13 @@ class DigitLabel(QtWidgets.QLabel):
             self.sig_stepped.emit(-1)
             self.drag_accum += threshold
             
-    # 新增：捕获双击事件
     def mouseDoubleClickEvent(self, event):
         self.sig_double_clicked.emit()
         super().mouseDoubleClickEvent(event)
 
 class InteractiveFreqDisplay(QtWidgets.QWidget):
     sig_step_requested = QtCore.pyqtSignal(float)
-    sig_double_clicked = QtCore.pyqtSignal() # 新增：汇总的双击信号
+    sig_double_clicked = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -182,11 +181,10 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         lbl.setFixedSize(38, 70) 
         lbl.sig_selected.connect(self.on_digit_selected)
         lbl.sig_stepped.connect(lambda direction, step=step_hz: self.sig_step_requested.emit(direction * step))
-        lbl.sig_double_clicked.connect(self.sig_double_clicked.emit) # 新增：连接子控件的双击信号
+        lbl.sig_double_clicked.connect(self.sig_double_clicked.emit)
         self.digits.append(lbl)
         layout.addWidget(lbl)
 
-    # 新增：点击频率管空白处也能触发双击
     def mouseDoubleClickEvent(self, event):
         self.sig_double_clicked.emit()
         super().mouseDoubleClickEvent(event)
@@ -356,7 +354,6 @@ class ConfigDialog(QtWidgets.QDialog):
         parent_layout.addLayout(vbox)
         return slider, label
 
-# ================= 新增：自定义数字小键盘弹窗 =================
 class NumpadDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, current_mhz=""):
         super().__init__(parent)
@@ -394,7 +391,7 @@ class NumpadDialog(QtWidgets.QDialog):
             btn.setStyleSheet("font-size: 20px; font-weight: bold;")
             btn.clicked.connect(lambda checked, t=text: self.on_button_clicked(t))
             
-            if len(btn_info) == 5: # 跨列处理，如“确认”按钮
+            if len(btn_info) == 5:
                 grid.addWidget(btn, row, col, btn_info[3], btn_info[4])
             else:
                 grid.addWidget(btn, row, col)
@@ -432,7 +429,7 @@ class Ui_MainWindow:
 
     def setup_ui(self, window):
         window.setWindowTitle("Malachite-Style SDR")
-        window.resize(1024, 600)
+        window.resize(1024, 600) # 调回标准窗口高度
         window.setStyleSheet(DARK_STYLE) 
 
         main_widget = QtWidgets.QWidget()
@@ -478,17 +475,51 @@ class Ui_MainWindow:
         top_bar_layout.addLayout(btn_layout)
         root_layout.addLayout(top_bar_layout)
 
-        # ================= 2. 频率管与【唯一】音量按钮 =================
+        # ================= 2. 频率管、音频频谱与音量 =================
         main_content_layout = QtWidgets.QVBoxLayout()
         
         freq_layout = QtWidgets.QHBoxLayout()
         self.freq_display = InteractiveFreqDisplay()
         freq_layout.addWidget(self.freq_display)
         
-        # 将音量按钮推向最右侧
-        freq_layout.addStretch() 
+        # --- 新增：将音频频谱放在这里（替代原本的 stretch 空白区） ---
+        self.audio_container = QtWidgets.QWidget()
+        self.audio_container.setFixedHeight(95) # 设定合适高度匹配左侧频率管
+        audio_layout = QtWidgets.QVBoxLayout(self.audio_container)
+        audio_layout.setContentsMargins(15, 0, 15, 0) # 左右稍微留出边距
+        audio_layout.setSpacing(2)
+        
+        lbl_audio_title = QtWidgets.QLabel(" 音频频谱 ")
+        lbl_audio_title.setStyleSheet("color: #8BC34A; background: transparent; font-weight: bold; font-family: 'Consolas'; font-size: 10px; padding: 0px;")
+        audio_layout.addWidget(lbl_audio_title)
 
-        # ！！！ 这是全屏唯一的音量按钮，放置在频率显示区的右边 ！！！
+        self.audio_plot_widget = pg.PlotWidget()
+        self.audio_plot_widget.setMenuEnabled(False)
+        self.audio_plot_widget.setMouseEnabled(x=False, y=False)
+        self.audio_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        
+        small_font = QtGui.QFont('Consolas', 8)
+        audio_axis_bottom = self.audio_plot_widget.getAxis('bottom')
+        audio_axis_bottom.setTickFont(small_font)
+        audio_axis_bottom.setTextPen('#888888')
+        audio_axis_bottom.setPen('#555555')
+        audio_axis_bottom.setHeight(18) # 减少底部坐标轴占用的高度
+        
+        audio_axis_left = self.audio_plot_widget.getAxis('left')
+        audio_axis_left.setTickFont(small_font)
+        audio_axis_left.setTextPen('#888888')
+        audio_axis_left.setPen('#555555')
+        audio_axis_left.setWidth(25)
+
+        self.audio_plot_widget.setYRange(-100, 0, padding=0)
+        self.audio_plot_widget.setXRange(0, 5, padding=0) 
+        
+        self.audio_curve = self.audio_plot_widget.plot(pen=pg.mkPen(color='#8BC34A', width=1.5))
+        audio_layout.addWidget(self.audio_plot_widget)
+        
+        # 将音频频谱区域添加到顶栏，并让其自动填满剩余空间
+        freq_layout.addWidget(self.audio_container, stretch=1) 
+
         self.vol_btn = QtWidgets.QPushButton("音量")
         self.vol_btn.setFixedSize(65, 36) 
         self.vol_btn.setCursor(QtCore.Qt.PointingHandCursor)
@@ -522,8 +553,6 @@ class Ui_MainWindow:
         pg.setConfigOption('background', '#000000')
         pg.setConfigOption('foreground', '#666666')
         
-        small_font = QtGui.QFont('Consolas', 8)
-        
         # --- A. 频谱图区 ---
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.hideAxis('left')
@@ -532,11 +561,9 @@ class Ui_MainWindow:
         
         spec_right_axis = self.plot_widget.getAxis('right')
         spec_right_axis.setTickSpacing(20, 10) 
-        
         spec_right_axis.setWidth(28) 
         spec_right_axis.setStyle(tickTextOffset=1)
         spec_right_axis.setTickFont(small_font)
-        
         spec_right_axis.setTextPen('#888888')
         spec_right_axis.setPen('#555555')
         
@@ -556,7 +583,6 @@ class Ui_MainWindow:
         
         self.plot_container = QtWidgets.QWidget()
         overlay_layout = QtWidgets.QGridLayout(self.plot_container)
-        
         overlay_layout.setContentsMargins(0, 0, 0, 0) 
         overlay_layout.addWidget(self.plot_widget, 0, 0, 3, 3) 
         
@@ -570,7 +596,6 @@ class Ui_MainWindow:
         self.lbl_right_freq = QtWidgets.QLabel("---.--- MHz")
         self.lbl_right_freq.setStyleSheet(osd_style_right)
 
-        # ！！！彻底移除了这里多余的按钮，只保留 OSD 文字标签！！！
         overlay_layout.addWidget(self.lbl_scale, 0, 2, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
         overlay_layout.addWidget(self.lbl_left_freq, 2, 0, QtCore.Qt.AlignBottom | QtCore.Qt.AlignLeft)
         overlay_layout.addWidget(self.lbl_right_freq, 2, 2, QtCore.Qt.AlignBottom | QtCore.Qt.AlignRight)
@@ -620,11 +645,9 @@ class Ui_MainWindow:
         
         cb_axis = self.colorbar_widget.getAxis('right')
         cb_axis.setTickSpacing(20, 10)
-        
         cb_axis.setWidth(18) 
         cb_axis.setStyle(tickTextOffset=1)
         cb_axis.setTickFont(small_font)
-        
         cb_axis.setTextPen('#888888')
         cb_axis.setPen('#555555')
         
@@ -639,9 +662,9 @@ class Ui_MainWindow:
         
         wf_layout.addWidget(self.waterfall_widget)
         wf_layout.addWidget(self.colorbar_widget)
-        
         self.splitter.addWidget(self.waterfall_container)
+
+        # 恢复正常的二等分比例
         self.splitter.setSizes([150, 450]) 
-        
         main_content_layout.addWidget(self.splitter)
         root_layout.addLayout(main_content_layout)

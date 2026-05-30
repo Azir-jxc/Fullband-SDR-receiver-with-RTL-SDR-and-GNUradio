@@ -11,6 +11,11 @@ class RadioBackend:
         self.socket.connect(ZMQ_ADDRESS)
         self.socket.setsockopt_string(zmq.SUBSCRIBE, '')
         
+        # 新增：音频 FFT ZMQ 订阅
+        self.audio_socket = self.context.socket(zmq.SUB)
+        self.audio_socket.connect(ZMQ_IQ_ADDRESS)
+        self.audio_socket.setsockopt_string(zmq.SUBSCRIBE, '')
+        
         self.gr_rpc = xmlrpc.client.ServerProxy(XMLRPC_ADDRESS)
 
     def get_latest_fft(self):
@@ -18,6 +23,19 @@ class RadioBackend:
         try:
             while True:
                 message = self.socket.recv(flags=zmq.NOBLOCK)
+                data_complex = np.frombuffer(message, dtype=np.complex64)
+                if len(data_complex) >= FFT_SIZE:
+                    latest_fft = data_complex[-FFT_SIZE:]
+        except zmq.Again:
+            pass 
+        return latest_fft
+
+    # 新增：获取最新音频 FFT 数据
+    def get_latest_audio_fft(self):
+        latest_fft = None
+        try:
+            while True:
+                message = self.audio_socket.recv(flags=zmq.NOBLOCK)
                 data_complex = np.frombuffer(message, dtype=np.complex64)
                 if len(data_complex) >= FFT_SIZE:
                     latest_fft = data_complex[-FFT_SIZE:]
@@ -101,4 +119,5 @@ class RadioBackend:
 
     def close(self):
         self.socket.close()
+        self.audio_socket.close()
         self.context.term()

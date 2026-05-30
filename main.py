@@ -66,6 +66,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.alpha = 2.0 / (self.avg_lengths[self.avg_index] + 1.0)
         self.averaged_power_db = None
         
+        # 音频频谱轴 (0 到 24 kHz，对应数组后半段)
+        self.audio_freqs_x = np.linspace(0, 24, FFT_SIZE // 2)
+
         self.update_status_badges() 
         self.bind_events()
         
@@ -80,22 +83,18 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.sync_timer.timeout.connect(self.sync_status)
         self.sync_timer.start(1000) 
 
-    # ================= 关键新增：静默重启底层进程 =================
     def restart_sdr_process(self, mode_idx):
         """杀掉旧进程并根据新的直采模式拉起新进程"""
         print(f"[前端管控] 正在重启底层无线电进程，直采模式切换为: {mode_idx} ...")
         
-        # 1. 如果有旧后端的通信连接，先断开
         if self.backend:
             try: self.backend.close()
             except: pass
             
-        # 2. 杀掉旧的 GNU Radio 进程以释放硬件 USB 占用
         if self.gr_process:
             self.gr_process.terminate()
             self.gr_process.wait()
             
-        # 3. 组装新命令并启动
         cmd = [sys.executable, "top_block.py", "--direct-samp-mode", str(mode_idx)]
         self.gr_process = subprocess.Popen(
             cmd,
@@ -103,18 +102,42 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             stderr=subprocess.STDOUT
         )
         
-        # 4. 等待硬件初始化及 XMLRPC 服务就绪
-        time.sleep(2)
-        
-        # 5. 重连后端大管家
         self.backend = RadioBackend()
         
-        # 6. 恢复之前的关键状态（频率和音量）
+        ready = False
+        for _ in range(20): 
+            time.sleep(0.5)
+            if self.backend.get_sdr_freq() > 0:
+                ready = True
+                break
+                
+        if not ready:
+            print("[前端管控] 警告：底层进程初始化超时，状态可能无法同步！")
+            return
+
+        if self.cur_sr_mhz > 0:
+            self.backend.set_sdr_samp_rate(self.cur_sr_mhz * 1e6)
+            
+        if self.sdr_freq_hz > 0:
+            self.backend.set_sdr_freq(self.sdr_freq_hz)
         if self.target_freq_hz > 0:
-            self.safe_set_sdr_and_target_freq(self.target_freq_hz)
+            self.backend.set_target_freq(self.target_freq_hz)
+            
+        self.backend.set_gain_rf(self.cur_rf_gain)
+        self.backend.set_gain_if(self.cur_if_gain)
+        self.backend.set_gain_bb(self.cur_bb_gain)
+        
+        try:
+            idx, low_hz, high_hz = DEMOD_MODES[self.cur_demod_mode]
+            self.backend.set_demod_mode(idx)
+            self.backend.set_filter_bw(self.cur_demod_mode, low_hz, high_hz)
+        except Exception as e:
+            print(f"[前端管控] 解调模式恢复异常: {e}")
+            
+        self.backend.set_squelch(self.cur_squelch)
         self.backend.set_audio_value(self.cur_audio_value)
-        print("[前端管控] 底层流图重启并重连完毕！")
-    # ==============================================================
+        
+        print("[前端管控] 底层流图重启并重连完毕，所有状态已对齐！")
 
     def _init_custom_grid(self):
         self.grid_lines_x = []
@@ -372,12 +395,10 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         new_mode_str = self.config_dialog.mode_combo.currentText()
         new_sr_mhz = float(new_sr_str)
         
-        # ================= 关键修改：触发硬重启 =================
         if new_mode_str != self.cur_samp_mode:
             self.cur_samp_mode = new_mode_str
             mode_idx = 0 if "正交" in new_mode_str else (1 if "I 通道" in new_mode_str else 2)
-            self.restart_sdr_process(mode_idx) # 直接重启进程
-        # ==========================================================
+            self.restart_sdr_process(mode_idx) # 触发硬重启
             
         if new_sr_mhz != self.cur_sr_mhz:
             self.cur_sr_mhz = new_sr_mhz
@@ -524,6 +545,16 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             s_meter_val = self.averaged_power_db[idx]
             self.ui.s_meter.setValue(int(s_meter_val))
 
+        # === 修复：正确截取带有 shift 的音频 FFT 右半部分 (正频率) ===
+        latest_audio_fft = self.backend.get_latest_audio_fft()
+        if latest_audio_fft is not None:
+            # FFT经过了shift，DC(0Hz)在正中央(index 512)，取右半部 [512:1024]
+            audio_mag = np.abs(latest_audio_fft[FFT_SIZE // 2 :])
+            
+            # 由于切片正确包含了真实的低频能量，无需再加粗暴的补偿
+            audio_power = 20 * np.log10(audio_mag / FFT_SIZE + 1e-12)
+            self.ui.audio_curve.setData(self.audio_freqs_x, audio_power)
+
     def closeEvent(self, event):
         """窗口关闭时彻底清理资源和进程"""
         self.plot_timer.stop()
@@ -536,7 +567,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         event.accept()
 
 if __name__ == '__main__':
-    # 底部只需保留极简的 PyQt5 启动逻辑
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
     QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
     app = QtWidgets.QApplication(sys.argv)

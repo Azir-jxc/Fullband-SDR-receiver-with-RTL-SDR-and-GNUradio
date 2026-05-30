@@ -162,7 +162,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [664, 464.0]
+    coordinate: [728, 448.0]
     rotation: 0
     state: true
 - name: samp_rate
@@ -174,7 +174,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2512, 224.0]
+    coordinate: [2392, 232.0]
     rotation: 0
     state: true
 - name: sdr_freq
@@ -186,7 +186,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [160, 88.0]
+    coordinate: [0, 88.0]
     rotation: 0
     state: true
 - name: sdr_freq
@@ -354,6 +354,26 @@ blocks:
     coordinate: [3923, 246]
     rotation: 0
     state: disabled
+- name: analog_agc_xx_1
+  id: analog_agc_xx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    gain: '1.0'
+    max_gain: '65536'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    rate: 625e-6
+    reference: '1.0'
+    type: complex
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [960, 296.0]
+    rotation: 0
+    state: enabled
 - name: analog_am_demod_cf_0
   id: analog_am_demod_cf
   parameters:
@@ -506,40 +526,6 @@ blocks:
     coordinate: [1616, 368.0]
     rotation: 0
     state: enabled
-- name: analog_simple_squelch_cc_3
-  id: analog_simple_squelch_cc
-  parameters:
-    affinity: ''
-    alias: ''
-    alpha: '1'
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    threshold: squelch
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1584, 504.0]
-    rotation: 0
-    state: enabled
-- name: analog_simple_squelch_cc_4
-  id: analog_simple_squelch_cc
-  parameters:
-    affinity: ''
-    alias: ''
-    alpha: '1'
-    comment: ''
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    threshold: squelch
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [1632, 600.0]
-    rotation: 0
-    state: enabled
 - name: analog_wfm_rcv_0
   id: analog_wfm_rcv
   parameters:
@@ -571,7 +557,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2504, 312.0]
+    coordinate: [2384, 320.0]
     rotation: 0
     state: enabled
 - name: band_pass_filter_0
@@ -653,7 +639,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1800, 496.0]
+    coordinate: [1720, 512.0]
     rotation: 0
     state: enabled
 - name: blocks_complex_to_real_0_0
@@ -669,7 +655,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1800, 608.0]
+    coordinate: [1616, 656.0]
     rotation: 0
     state: enabled
 - name: blocks_keep_m_in_n_0
@@ -724,7 +710,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [640, 328.0]
+    coordinate: [584, 336.0]
     rotation: 0
     state: true
 - name: blocks_multiply_xx_1_0
@@ -742,7 +728,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [2344, 304.0]
+    coordinate: [2280, 312.0]
     rotation: 0
     state: true
 - name: blocks_selector_0
@@ -765,7 +751,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1032, 232.0]
+    coordinate: [1088, 256.0]
     rotation: 0
     state: true
 - name: blocks_selector_0_0
@@ -806,7 +792,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [424, 184.0]
+    coordinate: [352, 192.0]
     rotation: 0
     state: true
 - name: blocks_stream_to_vector_0_0
@@ -818,13 +804,13 @@ blocks:
     maxoutbuf: '0'
     minoutbuf: '0'
     num_items: '1024'
-    type: complex
+    type: float
     vlen: '1'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [424, 64.0]
+    coordinate: [2120, 104.0]
     rotation: 0
     state: true
 - name: dc_blocker_xx_0
@@ -859,7 +845,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [224, 64.0]
+    coordinate: [176, 72.0]
     rotation: 0
     state: true
 - name: fft_vxx_0
@@ -880,7 +866,28 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [640, 144.0]
+    coordinate: [520, 152.0]
+    rotation: 0
+    state: true
+- name: fft_vxx_0_0
+  id: fft_vxx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    fft_size: '1024'
+    forward: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    nthreads: '1'
+    shift: 'True'
+    type: float
+    window: window.blackmanharris(1024)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2256, 32.0]
     rotation: 0
     state: true
 - name: low_pass_filter_0
@@ -952,7 +959,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [784, 296.0]
+    coordinate: [728, 296.0]
     rotation: 0
     state: enabled
 - name: low_pass_filter_0_1
@@ -1531,7 +1538,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [872, 136.0]
+    coordinate: [744, 144.0]
     rotation: 0
     state: true
 - name: zeromq_pub_sink_0_0
@@ -1553,7 +1560,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [672, 0.0]
+    coordinate: [2504, 32.0]
     rotation: 0
     state: true
 
@@ -1561,6 +1568,7 @@ connections:
 - [analog_agc_xx_0, '0', blocks_selector_0_0, '0']
 - [analog_agc_xx_0_0_0, '0', audio_sink_0, '0']
 - [analog_agc_xx_0_2, '0', audio_sink_0, '0']
+- [analog_agc_xx_1, '0', blocks_selector_0, '0']
 - [analog_am_demod_cf_0, '0', blocks_selector_0_0, '0']
 - [analog_const_source_x_0, '0', blocks_multiply_xx_1_0, '1']
 - [analog_nbfm_rx_0, '0', blocks_selector_0_0, '1']
@@ -1569,11 +1577,9 @@ connections:
 - [analog_simple_squelch_cc_0, '0', blocks_complex_to_mag_0, '0']
 - [analog_simple_squelch_cc_1, '0', analog_nbfm_rx_0, '0']
 - [analog_simple_squelch_cc_2, '0', analog_wfm_rcv_0, '0']
-- [analog_simple_squelch_cc_3, '0', blocks_complex_to_real_0, '0']
-- [analog_simple_squelch_cc_4, '0', blocks_complex_to_real_0_0, '0']
 - [analog_wfm_rcv_0, '0', blocks_selector_0_0, '2']
-- [band_pass_filter_0, '0', analog_simple_squelch_cc_3, '0']
-- [band_pass_filter_0_0, '0', analog_simple_squelch_cc_4, '0']
+- [band_pass_filter_0, '0', blocks_complex_to_real_0, '0']
+- [band_pass_filter_0_0, '0', blocks_complex_to_real_0_0, '0']
 - [blocks_complex_to_mag_0, '0', blocks_selector_0_0, '0']
 - [blocks_complex_to_mag_0, '0', dc_blocker_xx_0, '0']
 - [blocks_complex_to_real_0, '0', blocks_selector_0_0, '3']
@@ -1589,20 +1595,21 @@ connections:
 - [blocks_selector_0_0, '0', analog_agc_xx_0_0_0, '0']
 - [blocks_selector_0_0, '0', analog_agc_xx_0_2, '0']
 - [blocks_selector_0_0, '0', blocks_multiply_xx_1_0, '0']
+- [blocks_selector_0_0, '0', blocks_stream_to_vector_0_0, '0']
 - [blocks_stream_to_vector_0, '0', fft_vxx_0, '0']
-- [blocks_stream_to_vector_0_0, '0', zeromq_pub_sink_0_0, '0']
+- [blocks_stream_to_vector_0_0, '0', fft_vxx_0_0, '0']
 - [dc_blocker_xx_0, '0', analog_agc_xx_0, '0']
 - [dc_blocker_xx_0, '0', blocks_selector_0_0, '0']
 - [fft_vxx_0, '0', zeromq_pub_sink_0, '0']
+- [fft_vxx_0_0, '0', zeromq_pub_sink_0_0, '0']
 - [low_pass_filter_0, '0', analog_simple_squelch_cc_1, '0']
 - [low_pass_filter_0_0, '0', analog_am_demod_cf_0, '0']
 - [low_pass_filter_0_0, '0', analog_simple_squelch_cc_0, '0']
-- [low_pass_filter_0_0_0, '0', blocks_selector_0, '0']
+- [low_pass_filter_0_0_0, '0', analog_agc_xx_1, '0']
 - [low_pass_filter_0_1, '0', analog_simple_squelch_cc_2, '0']
 - [rtlsdr_source_0, '0', blocks_multiply_xx_0, '0']
 - [rtlsdr_source_0, '0', blocks_multiply_xx_1, '0']
 - [rtlsdr_source_0, '0', blocks_stream_to_vector_0, '0']
-- [rtlsdr_source_0, '0', blocks_stream_to_vector_0_0, '0']
 - [rtlsdr_source_0, '0', qtgui_freq_sink_x_0, '0']
 
 metadata:
