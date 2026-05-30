@@ -4,12 +4,14 @@ import os
 import time
 import subprocess
 import numpy as np
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 
 from config import *
 from radio_backend import RadioBackend
 from ui_layout import Ui_MainWindow
+# ====== 导入 FT8 相关和手动校时函数 ======
+from ft8_worker import FT8DecoderThread, manual_time_sync
 
 class SpectrumAnalyzer(QtWidgets.QMainWindow):
     def __init__(self):
@@ -44,6 +46,12 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         # 初始化进程控制状态
         self.gr_process = None
         self.backend = None
+
+        # ====== FT8 解码相关状态 ======
+        self.ft8_thread = None
+        self.ft8_mode_active = False
+        self.ft8_dialog = None # 监控弹窗对象
+        # ==============================
         
         # 首次拉起底层进程 (默认模式 0)
         self.restart_sdr_process(0)
@@ -66,7 +74,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.alpha = 2.0 / (self.avg_lengths[self.avg_index] + 1.0)
         self.averaged_power_db = None
         
-        # 音频频谱轴 (0 到 24 kHz，对应数组后半段)
+        # 音频频谱轴
         self.audio_freqs_x = np.linspace(0, 24, FFT_SIZE // 2)
 
         self.update_status_badges() 
@@ -84,7 +92,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.sync_timer.start(1000) 
 
     def restart_sdr_process(self, mode_idx):
-        """杀掉旧进程并根据新的直采模式拉起新进程"""
         print(f"[前端管控] 正在重启底层无线电进程，直采模式切换为: {mode_idx} ...")
         
         if self.backend:
@@ -251,20 +258,101 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.ui.plot_widget.getViewBox().sigXRangeChanged.connect(self.on_xrange_changed)
         self.ui.plot_widget.scene().sigMouseClicked.connect(self.on_plot_clicked)
+            
+        if hasattr(self.ui, 'btn_ft8'):
+            self.ui.btn_ft8.clicked.connect(self.toggle_ft8_mode)
+
+    # ================== FT8 解码相关方法 (全新弹窗逻辑) ==================
+    def toggle_ft8_mode(self):
+        """点击主界面开启按钮，拉起 FT8 独立监控弹窗"""
+        # 如果已经开启，仅仅是把弹窗前置显示
+        if self.ft8_mode_active and self.ft8_dialog:
+            self.ft8_dialog.show()
+            self.ft8_dialog.raise_()
+            return
+
+        print("\n[FT8] === 正在启动 FT8 解码模式 ===")
+        # 强制设置接收机参数以适应 FT8
+        self.cur_demod_mode = "USB"
+        try:
+            idx = DEMOD_MODES["USB"][0]
+            self.backend.set_demod_mode(idx)
+        except KeyError:
+            self.backend.set_demod_mode(3)
+        self.backend.set_filter_bw("USB", 200, 3000)
+        self.update_status_badges()
+
+        # 启动后台解码线程
+        if self.ft8_thread is None:
+            self.ft8_thread = FT8DecoderThread(self.backend, sample_rate=48000)
+            self.ft8_thread.sig_message_decoded.connect(self.on_ft8_message_decoded)
+            self.ft8_thread.sig_status_update.connect(self.on_ft8_status_update)
+            self.ft8_thread.start()
+            
+        self.ft8_mode_active = True
+        
+        # 实例化并显示监控弹窗
+        if self.ft8_dialog is None:
+            from ui_layout import FT8MonitorDialog
+            self.ft8_dialog = FT8MonitorDialog(self)
+            
+            # 绑定弹窗内部按钮和关闭事件
+            self.ft8_dialog.sig_sync_requested.connect(self.on_manual_sync_clicked)
+            self.ft8_dialog.sig_closed.connect(self.stop_ft8_mode)
+            
+        self.ft8_dialog.log_box.clear()
+        self.ft8_dialog.append_log("【DEBUG】FT8 接收通道已打通。")
+        self.ft8_dialog.append_log("【提示】请在秒表刚好跳到15秒的整数倍时，点击上方校时按钮。")
+        self.ft8_dialog.show()
+        self.ft8_dialog.raise_()
+        
+    def on_manual_sync_clicked(self):
+        """处理弹窗内校时按钮按下的事件，并将信息推送到历史记录"""
+        manual_time_sync() # 调用底层的极客修补算法
+        if self.ft8_dialog:
+            self.ft8_dialog.append_log("【校时】⏱️手动对齐周期完成！")
+
+    def stop_ft8_mode(self):
+        """当弹窗被关闭时，彻底停止底层解调"""
+        print("\n[FT8] === 正在停止 FT8 解码模式 ===")
+        if self.ft8_thread:
+            self.ft8_thread.stop()
+            self.ft8_thread = None
+            
+        self.ft8_mode_active = False
+        self.ft8_dialog = None
+        print("[FT8] 解码模式已彻底关闭。")
+
+    def on_ft8_status_update(self, msg):
+        """将后台状态推送到弹窗内"""
+        print(f"[FT8 状态] {msg}")
+        if self.ft8_dialog:
+            self.ft8_dialog.append_log(f"【状态】{msg}")
+
+    def on_ft8_message_decoded(self, candidate):
+        """将成功解码的呼号推送到弹窗内"""
+        msg_text = candidate.msg
+        snr = candidate.snr
+        dt = candidate.dt
+        freq_hz = candidate.fHz
+        
+        log_entry = f"[{time.strftime('%H:%M:%S')}] 频偏:{freq_hz:4.0f}Hz | SNR:{snr:+03d} | DT:{dt:4.1f}s | {msg_text}"
+        print(f"🔥 解码成功 -> {log_entry}")
+        
+        if self.ft8_dialog:
+            self.ft8_dialog.append_log(f"🔥 {log_entry}", is_success=True)
+    # ======================================================
 
     def open_numpad_dialog(self):
-        """双击调出的数字键盘，强制全局跳转硬件频率"""
         from ui_layout import NumpadDialog
         dialog = NumpadDialog(self, "")
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             new_mhz = dialog.get_value()
             if new_mhz > 0:
                 new_hz = new_mhz * 1e6
-                # 修改点：不再判断 tuning_mode，直接强制移动底层 SDR 硬件中心和解调目标
                 self.safe_set_sdr_and_target_freq(new_hz)
 
     def on_freq_step_requested(self, delta_hz):
-        """滚轮/滑动频率管，依然受调谐模式控制"""
         if self.tuning_mode == "CENTRAL":
             self.safe_set_sdr_and_target_freq(self.sdr_freq_hz + delta_hz)
         else:
@@ -398,7 +486,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         if new_mode_str != self.cur_samp_mode:
             self.cur_samp_mode = new_mode_str
             mode_idx = 0 if "正交" in new_mode_str else (1 if "I 通道" in new_mode_str else 2)
-            self.restart_sdr_process(mode_idx) # 触发硬重启
+            self.restart_sdr_process(mode_idx) 
             
         if new_sr_mhz != self.cur_sr_mhz:
             self.cur_sr_mhz = new_sr_mhz
@@ -545,20 +633,19 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             s_meter_val = self.averaged_power_db[idx]
             self.ui.s_meter.setValue(int(s_meter_val))
 
-        # === 修复：正确截取带有 shift 的音频 FFT 右半部分 (正频率) ===
         latest_audio_fft = self.backend.get_latest_audio_fft()
         if latest_audio_fft is not None:
-            # FFT经过了shift，DC(0Hz)在正中央(index 512)，取右半部 [512:1024]
             audio_mag = np.abs(latest_audio_fft[FFT_SIZE // 2 :])
-            
-            # 由于切片正确包含了真实的低频能量，无需再加粗暴的补偿
             audio_power = 20 * np.log10(audio_mag / FFT_SIZE + 1e-12)
             self.ui.audio_curve.setData(self.audio_freqs_x, audio_power)
 
     def closeEvent(self, event):
-        """窗口关闭时彻底清理资源和进程"""
         self.plot_timer.stop()
         self.sync_timer.stop()
+
+        # 确保窗口关闭时彻底杀掉后台进程
+        self.stop_ft8_mode()
+
         if self.backend:
             self.backend.close()
         if self.gr_process:

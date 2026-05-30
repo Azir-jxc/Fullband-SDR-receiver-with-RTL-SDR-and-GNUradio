@@ -1,4 +1,5 @@
 # ui_layout.py
+import time
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import numpy as np
@@ -62,6 +63,106 @@ QSpinBox, QDoubleSpinBox, QComboBox {
 }
 """
 
+# ================= 新增：FT8 监控独立弹窗 =================
+class FT8MonitorDialog(QtWidgets.QDialog):
+    sig_sync_requested = QtCore.pyqtSignal()
+    sig_closed = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("FT8 接收监控终端")
+        self.setMinimumSize(550, 450)
+        self.setStyleSheet(DARK_STYLE)
+        
+        # 保持窗口在最前端
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(10)
+        
+        # --- 顶部：控制与状态栏 ---
+        ctrl_layout = QtWidgets.QHBoxLayout()
+        
+        lbl_title = QtWidgets.QLabel("接收周期:")
+        lbl_title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        
+        # 15秒黄色进度条
+        self.progress = QtWidgets.QProgressBar()
+        self.progress.setRange(0, 150) # 模拟 15.0 秒
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(22)
+        self.progress.setStyleSheet("""
+            QProgressBar { border: 1px solid #555; border-radius: 4px; background-color: #1a1a1a; }
+            QProgressBar::chunk { background-color: #FFD700; border-radius: 3px; }
+        """)
+        
+        # 倒计时文本
+        self.lbl_time = QtWidgets.QLabel("00.0s / 15s")
+        self.lbl_time.setStyleSheet("font-size: 16px; font-weight: bold; color: #00FFCC; font-family: 'Consolas';")
+        self.lbl_time.setFixedWidth(100)
+        
+        # 校时按钮
+        self.btn_sync = QtWidgets.QPushButton("⏱️ 手动校时")
+        self.btn_sync.setStyleSheet("background-color: #4CAF50; color: white; padding: 5px 10px;")
+        self.btn_sync.clicked.connect(self.sig_sync_requested.emit)
+
+        ctrl_layout.addWidget(lbl_title)
+        ctrl_layout.addWidget(self.progress, stretch=1)
+        ctrl_layout.addWidget(self.lbl_time)
+        ctrl_layout.addWidget(self.btn_sync)
+        
+        layout.addLayout(ctrl_layout)
+
+        # --- 中部：历史报文展示区 ---
+        self.log_box = QtWidgets.QTextBrowser()
+        self.log_box.setStyleSheet("""
+            QTextBrowser {
+                background-color: #050505; 
+                color: #FFFFFF; 
+                font-family: 'Consolas', monospace; 
+                font-size: 14px; 
+                border: 1px solid #444;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
+        layout.addWidget(self.log_box, stretch=1)
+
+        # UI 刷新定时器 (100ms更新一次进度条)
+        self.ui_timer = QtCore.QTimer(self)
+        self.ui_timer.timeout.connect(self.update_timer_display)
+        self.ui_timer.start(100)
+        
+    def update_timer_display(self):
+        """利用被劫持的系统时间计算并刷新进度条"""
+        # 注意：这里的 time.time() 会自动获取 ft8_worker 补偿过的时间
+        current_raw = time.time()
+        rem = current_raw % 15.0
+        
+        # 进度条平滑填充
+        self.progress.setValue(int(rem * 10))
+        self.lbl_time.setText(f"{rem:04.1f}s / 15s")
+
+    def append_log(self, text, is_success=False):
+        """向日志框添加内容"""
+        # 如果是成功解码，给个特殊的颜色包裹
+        if is_success:
+            html = f"<span style='color: #FFFF00;'>{text}</span>"
+        else:
+            html = f"<span style='color: #00FFCC;'>{text}</span>"
+            
+        self.log_box.append(html)
+        # 滚动到底部
+        scrollbar = self.log_box.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def closeEvent(self, event):
+        """窗口关闭时通知主程序停止 FT8"""
+        self.ui_timer.stop()
+        self.sig_closed.emit()
+        super().closeEvent(event)
+
+
 # ================= 悬浮音量滑块组件 =================
 class VolumePopup(QtWidgets.QWidget):
     sig_vol_changed = QtCore.pyqtSignal(float)
@@ -95,9 +196,8 @@ class VolumePopup(QtWidgets.QWidget):
         real_val = 0.0 if val == 0 else val / 10.0
         self.sig_vol_changed.emit(real_val)
 
-# ================= 自定义交互式数字调节组件（滑动与滚轮，带动态步进） =================
+# ================= 自定义交互式数字调节组件 =================
 class SwipeNumberWidget(QtWidgets.QLabel):
-    """自定义交互式数字调节组件：点击高亮，上下滑动/滚轮更改数值（支持动态步进）"""
     valueChanged = QtCore.pyqtSignal(int)
 
     def __init__(self, value, min_val, max_val, base_step=1, suffix="", dynamic_step=False, parent=None):
@@ -122,7 +222,6 @@ class SwipeNumberWidget(QtWidgets.QLabel):
         self.update_style()
         
     def _get_current_step(self):
-        """根据当前数值的绝对值，动态计算步进大小"""
         if not self.dynamic_step:
             return self.base_step
             
@@ -370,7 +469,6 @@ class DemodConfigDialog(QtWidgets.QDialog):
         filter_layout = QtWidgets.QGridLayout(filter_box)
         filter_layout.addWidget(QtWidgets.QLabel("下限:"), 0, 0)
         
-        # 使用带动态步进的 SwipeNumberWidget，大数值调节更丝滑
         self.low_spin = SwipeNumberWidget(int(cur_low), -500000, 500000, 100, " Hz", dynamic_step=True)
         filter_layout.addWidget(self.low_spin, 0, 1)
         
@@ -383,7 +481,6 @@ class DemodConfigDialog(QtWidgets.QDialog):
         agc_layout = QtWidgets.QGridLayout(agc_box)
         agc_layout.addWidget(QtWidgets.QLabel("静噪:"), 0, 0)
         
-        # 静噪数值小，不需要动态步进
         self.squelch_spin = SwipeNumberWidget(int(cur_squelch), -150, 0, 1, " dB", dynamic_step=False)
         agc_layout.addWidget(self.squelch_spin, 0, 1)
         layout.addWidget(agc_box)
@@ -404,7 +501,7 @@ class DemodConfigDialog(QtWidgets.QDialog):
             self.low_spin.setValue(int(low))
             self.high_spin.setValue(int(high))
 
-# ================= 硬件射频前端小窗 (RTL-SDR V3 专属优化) =================
+# ================= 硬件射频前端小窗 =================
 class ConfigDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, cur_rf=20, cur_if=20, cur_bb=20, cur_sr="2.4", cur_mode="正交采样 (Quadrature)"):
         super().__init__(parent)
@@ -427,18 +524,14 @@ class ConfigDialog(QtWidgets.QDialog):
         mode_layout = QtWidgets.QHBoxLayout()
         mode_layout.addWidget(QtWidgets.QLabel("采样模式:"))
         self.mode_combo = QtWidgets.QComboBox()
-        # 兼容 RTL-SDR V3 的直接采样模式（Q通道听短波）
         self.mode_combo.addItems(["正交采样 (Quadrature)", "I 通道直采 (Direct I)", "Q 通道直采 (Direct Q)"])
         self.mode_combo.setCurrentText(cur_mode)
         self.mode_combo.setMinimumHeight(35)
         mode_layout.addWidget(self.mode_combo)
         layout.addLayout(mode_layout)
 
-        # 【界面显示】：针对 RTL-SDR 仅开放总 RF 增益
         self.rf_slider = self.create_swipe_number("RF 增益", cur_rf, layout)
         
-        # 【幽灵组件】：创建 IF 和 BB 对象，但不放入布局中。
-        # 这样不会在界面显示多余的无效组件，同时也保证 main.py 中的信号连接逻辑不会崩溃报错。
         self.if_slider = SwipeNumberWidget(cur_if, 0, 50, 1, " dB", dynamic_step=False)
         self.bb_slider = SwipeNumberWidget(cur_bb, 0, 50, 1, " dB", dynamic_step=False)
         
@@ -573,13 +666,19 @@ class Ui_MainWindow:
         
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.setSpacing(8)
+        
+        # ====== 仅保留唯一的启动按钮 (校时移到了弹窗内) ======
+        self.btn_ft8 = QtWidgets.QPushButton("📡 开启 FT8")
+        
         self.demod_config_btn = QtWidgets.QPushButton("解调设置")
         self.config_btn = QtWidgets.QPushButton("射频前端")
         self.spectrum_config_btn = QtWidgets.QPushButton("频谱设置")
         
+        btn_layout.addWidget(self.btn_ft8)
         btn_layout.addWidget(self.demod_config_btn)
         btn_layout.addWidget(self.config_btn)
         btn_layout.addWidget(self.spectrum_config_btn)
+        
         top_bar_layout.addLayout(btn_layout)
         root_layout.addLayout(top_bar_layout)
 

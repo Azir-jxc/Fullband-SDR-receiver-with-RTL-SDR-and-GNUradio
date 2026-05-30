@@ -68,6 +68,7 @@ class top_block(gr.top_block):
         # Blocks
         ##################################################
 
+        self.zeromq_pub_sink_0_0_0 = zeromq.pub_sink(gr.sizeof_float, 1024, 'tcp://127.0.0.1:5557', 100, False, (-1), '', True, True)
         self.zeromq_pub_sink_0_0 = zeromq.pub_sink(gr.sizeof_gr_complex, 1024, 'tcp://127.0.0.1:5556', 100, False, (-1), '', True, True)
         self.zeromq_pub_sink_0 = zeromq.pub_sink(gr.sizeof_gr_complex, 1024, 'tcp://127.0.0.1:5555', 100, False, (-1), '', True, True)
         self.xmlrpc_server_0 = SimpleXMLRPCServer(('localhost', 8080), allow_none=True)
@@ -128,6 +129,7 @@ class top_block(gr.top_block):
                 6.76))
         self.fft_vxx_0_0 = fft.fft_vfc(1024, True, window.blackmanharris(1024), True, 1)
         self.fft_vxx_0 = fft.fft_vcc(1024, True, window.blackmanharris(1024), True, 1)
+        self.blocks_stream_to_vector_0_0_0 = blocks.stream_to_vector(gr.sizeof_float*1, 1024)
         self.blocks_stream_to_vector_0_0 = blocks.stream_to_vector(gr.sizeof_float*1, 1024)
         self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, 1024)
         self.blocks_selector_0_0 = blocks.selector(gr.sizeof_float*1,demod_mode,0)
@@ -200,6 +202,7 @@ class top_block(gr.top_block):
         self.connect((self.blocks_complex_to_real_0_0, 0), (self.blocks_selector_0_0, 4))
         self.connect((self.blocks_multiply_xx_1, 0), (self.low_pass_filter_0_0_0, 0))
         self.connect((self.blocks_multiply_xx_1_0, 0), (self.audio_sink_0, 0))
+        self.connect((self.blocks_multiply_xx_1_0, 0), (self.blocks_stream_to_vector_0_0_0, 0))
         self.connect((self.blocks_selector_0, 3), (self.band_pass_filter_0, 0))
         self.connect((self.blocks_selector_0, 4), (self.band_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 1), (self.low_pass_filter_0, 0))
@@ -209,6 +212,7 @@ class top_block(gr.top_block):
         self.connect((self.blocks_selector_0_0, 0), (self.blocks_stream_to_vector_0_0, 0))
         self.connect((self.blocks_stream_to_vector_0, 0), (self.fft_vxx_0, 0))
         self.connect((self.blocks_stream_to_vector_0_0, 0), (self.fft_vxx_0_0, 0))
+        self.connect((self.blocks_stream_to_vector_0_0_0, 0), (self.zeromq_pub_sink_0_0_0, 0))
         self.connect((self.fft_vxx_0, 0), (self.zeromq_pub_sink_0, 0))
         self.connect((self.fft_vxx_0_0, 0), (self.zeromq_pub_sink_0_0, 0))
         self.connect((self.low_pass_filter_0, 0), (self.analog_simple_squelch_cc_1, 0))

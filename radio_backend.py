@@ -7,14 +7,22 @@ from config import *
 class RadioBackend:
     def __init__(self):
         self.context = zmq.Context()
+        
+        # 射频频谱 FFT ZMQ 订阅
         self.socket = self.context.socket(zmq.SUB)
         self.socket.connect(ZMQ_ADDRESS)
         self.socket.setsockopt_string(zmq.SUBSCRIBE, '')
         
-        # 新增：音频 FFT ZMQ 订阅
+        # 音频频谱 FFT ZMQ 订阅
         self.audio_socket = self.context.socket(zmq.SUB)
         self.audio_socket.connect(ZMQ_IQ_ADDRESS)
         self.audio_socket.setsockopt_string(zmq.SUBSCRIBE, '')
+        
+        # ====== 新增：原始音频波形 ZMQ 订阅 (FT8 使用) ======
+        self.raw_audio_socket = self.context.socket(zmq.SUB)
+        self.raw_audio_socket.connect("tcp://127.0.0.1:5557") # 对应 GNU Radio 中的 ZMQ PUB Sink 端口
+        self.raw_audio_socket.setsockopt_string(zmq.SUBSCRIBE, '')
+        # ====================================================
         
         self.gr_rpc = xmlrpc.client.ServerProxy(XMLRPC_ADDRESS)
 
@@ -30,7 +38,6 @@ class RadioBackend:
             pass 
         return latest_fft
 
-    # 新增：获取最新音频 FFT 数据
     def get_latest_audio_fft(self):
         latest_fft = None
         try:
@@ -42,6 +49,17 @@ class RadioBackend:
         except zmq.Again:
             pass 
         return latest_fft
+
+    # ====== 新增：获取解调后的原始音频数据 ======
+    def get_raw_audio(self):
+        """获取解调后的原始音频 float32 数据（每次 1024 个点）"""
+        try:
+            # 必须使用非阻塞模式 (NOBLOCK)，否则没收到数据时会卡死整个程序
+            message = self.raw_audio_socket.recv(flags=zmq.NOBLOCK)
+            return np.frombuffer(message, dtype=np.float32)
+        except zmq.Again:
+            return None
+    # ============================================
 
     def set_sdr_freq(self, freq_hz):
         try: self.gr_rpc.set_sdr_freq(freq_hz)
@@ -78,9 +96,11 @@ class RadioBackend:
     def get_gain_rf(self):
         try: return self.gr_rpc.get_gain_rf()
         except: return 20
+        
     def get_gain_if(self):
         try: return self.gr_rpc.get_gain_if()
         except: return 20
+        
     def get_gain_bb(self):
         try: return self.gr_rpc.get_gain_bb()
         except: return 20
@@ -120,4 +140,7 @@ class RadioBackend:
     def close(self):
         self.socket.close()
         self.audio_socket.close()
+        # ====== 新增：退出时清理原始音频 socket ======
+        self.raw_audio_socket.close() 
+        # ============================================
         self.context.term()
