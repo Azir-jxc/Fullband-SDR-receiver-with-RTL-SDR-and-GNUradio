@@ -280,6 +280,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         except KeyError:
             self.backend.set_demod_mode(3)
         self.backend.set_filter_bw("USB", 200, 3000)
+        
         self.update_status_badges()
 
         # 启动后台解码线程

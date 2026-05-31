@@ -4,20 +4,23 @@ import wave
 import time
 from PyFT8.time_utils import global_time_utils, Ticker
 import os
-# import pyaudio
+import pyaudio
 import pickle
 from PyFT8.databases import call_hashes, add_call_hashes
 
 T_CYC = 15
 HPS = 4
-BPT =2
+BPT = 2
 SYM_RATE = 6.25
 SAMP_RATE = 12000
 
 t2h = HPS/0.16
 LLR_SD_MIN = 0.5
 LDPC_CONTROL = (45, 12) 
-H0_RANGE = [int(0 *t2h), int(4 *t2h)]
+
+# 【优化1】：暴力拓宽时间搜索窗口，容忍 ZMQ 的传输延迟
+H0_RANGE = [int(-5 * t2h), int(10 * t2h)]
+
 H_SEARCH_0 = H0_RANGE[1] + 7 * HPS
 H_SEARCH_1 = H0_RANGE[1] + 43 * HPS
 
@@ -49,7 +52,7 @@ def unpack(bits):
             return ('Free text','not','implemented')
         else:
             return (['DXpedition','Field Day', 'Field Day', 'Telemetry'][n3-1],'not','implemented')
-    elif i3 == 1 or i3 == 2: # 1 = Std Msg incl /R 2 = 'EU VHF' = Std Msg incl /P
+    elif i3 == 1 or i3 == 2:
         return unpack_std(bits74, i3)
     elif i3 == 3:
         return ('RTTY RU','not','implemented')
@@ -247,7 +250,6 @@ class AudioIn:
         self.dBgrid_main_ptr = (self.dBgrid_main_ptr + 1) % self.hops_per_grid
         return (None, pyaudio.paContinue)
 
-
 #============== CANDIDATE ===========================================================
 
 from dataclasses import dataclass
@@ -314,10 +316,6 @@ class Candidate:
 
     def validate(self, msg_tuple):
         e = False
-        # checking if this is needed after adding full table_7 info and branches on i3, n3
-        #mt = msg_tuple
-        #e = e or (' ' in mt[0].strip() and not mt[0].startswith('CQ'))
-        #e = e or (' ' in mt[1].strip())
         if not e:
             return ' '.join(self.msg_tuple)
         
@@ -337,7 +335,15 @@ class Receiver():
                         min(self.audio_in.nFreqs - self.fbins_per_signal, int(freq_range[1]/self.df)))
         self.on_decode = on_decode
         self.on_busy_profile = on_busy_profile
+        
+        # 【新增】：控制死循环的开关标志
+        self.running = True 
+        
         threading.Thread(target=self.manage_cycle, daemon=True).start()
+
+    # 【新增】：彻底退出后台扫描的方法
+    def stop(self):
+        self.running = False
 
     def search(self, f0_idxs, cyclestart, sync_idx = 1):
         cands = []
@@ -345,26 +351,32 @@ class Receiver():
         sync_idx_offs = sync_idx*36*HPS
         costas_nhops = 7*HPS
         edge_to_cent = BPT//2
-        # search_hops covers all freqs, and hops as specified by H0_RANGE. data is needed 'costas hops' greater than max h0
         search_hops = self.audio_in.dBgrid_main[cycle_h0 + H0_RANGE[0]+sync_idx_offs: cycle_h0 + H0_RANGE[1]+sync_idx_offs + costas_nhops , edge_to_cent:]
         nh, nf = search_hops.shape
-        arr = np.zeros((7, nh, nf))     # costas 'row' for a single symbol index, by main nhops, nfreqs
+        arr = np.zeros((7, nh, nf))
         for i in range(7):
             hopshift = i * HPS
             arr[i, :nh-hopshift, :] = search_hops[hopshift:, :]
-        freq_stack = np.stack([np.roll(arr, -j * BPT, axis=2) for j in range(7)], axis=1) # 7x7 costas points by main nhops, nfreqs
+        freq_stack = np.stack([np.roll(arr, -j * BPT, axis=2) for j in range(7)], axis=1)
         rows = np.arange(7)
-        costas_vals = freq_stack[rows, COSTAS]  # 'wanted' costas points by main nhops, nfreqs
-        masked = freq_stack.copy()              # copy for punching out wanted points
-        masked[rows, COSTAS] = 0                # leave only 'unwanted' costas points by main nhops, nfreqs
-        row_sum = (1/6)*masked.sum(axis=1)      # sum of 'unwanted' by main nhops, nfreqs
-        row_scores = costas_vals - row_sum      # dB at costas index less sum(others) for each symbol in costas grid, by main nhops, nfreqs
-        scores = row_scores.sum(axis=0)         # search scores by main nhops, nfreqs
+        costas_vals = freq_stack[rows, COSTAS]
+        masked = freq_stack.copy()
+        masked[rows, COSTAS] = 0
+        row_sum = (1/6)*masked.sum(axis=1)
+        row_scores = costas_vals - row_sum
+        scores = row_scores.sum(axis=0)
         for f0_idx in f0_idxs:
             c = Candidate(cyclestart = cyclestart, f0_idx = f0_idx)
             h0_idx = int(np.argmax(scores[:nh-costas_nhops, f0_idx]))
             sync_score = float(scores[h0_idx, f0_idx])
-            c.h0_idx, c.sync_score = h0_idx + cycle_h0 , sync_score
+            # receiver.py 大约第 181 行
+
+# ❌ 错误代码：
+# c.h0_idx, c.sync_score = h0_idx + cycle_h0 , sync_score
+
+# ✅ 正确代码：补回 H0_RANGE[0] 
+            c.h0_idx, c.sync_score = h0_idx + cycle_h0 + H0_RANGE[0], sync_score
+            # c.h0_idx, c.sync_score = h0_idx + cycle_h0 , sync_score
             c.dt = (c.h0_idx - cycle_h0) * self.dt - 0.7
             c.fHz = int(f0_idx * self.df)
             cands.append(c)
@@ -372,7 +384,6 @@ class Receiver():
 
     def get_busy_profile(self):
         from numpy.lib.stride_tricks import as_strided
-
         def sliding_window_view(x, window_shape):
             x = np.asarray(x)
             shape = x.shape[:-1] + (x.shape[-1] - window_shape + 1, window_shape)
@@ -394,13 +405,17 @@ class Receiver():
         ticker_cycle_rollover = Ticker(0)
         ticker_search_for_syncs = Ticker(H_SEARCH_1, timing_function = lambda: self.audio_in.dBgrid_main_ptr, cycle_length = HOPS_PER_CYCLE)
         self.audio_in.sync_pointer_to_wall_clock()
-        while True:
+        
+        # 【修改】：由死循环改为条件循环，允许被主动结束
+        while self.running:
             time.sleep(0.040)
             ptr = self.audio_in.dBgrid_main_ptr
 
             if ticker_cycle_rollover.ticked():                
                 self.audio_in.sync_pointer_to_wall_clock()
                 self.curr_cycle = int(((self.audio_in.dBgrid_main_ptr + 1) % HOPS_PER_GRID) / HOPS_PER_CYCLE)
+                # 【优化2】：每周期清空去重缓存，防止挂机导致的内存泄漏
+                duplicate_filter.clear() 
         
             new_to_decode = []
             for c in candidates:
@@ -424,5 +439,4 @@ class Receiver():
                 candidates = self.search(self.f0_idxs, cyclestart)
                 if not self.on_busy_profile is None:
                     self.on_busy_profile(*self.get_busy_profile())
-                global_time_utils.tlog(f"[Cycle manager] New spectrum searched -> {len(candidates)} candidates", verbose = self.verbose) 
-
+                global_time_utils.tlog(f"[Cycle manager] New spectrum searched -> {len(candidates)} candidates", verbose = self.verbose)

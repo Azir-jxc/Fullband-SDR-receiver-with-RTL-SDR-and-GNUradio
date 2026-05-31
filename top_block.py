@@ -68,7 +68,7 @@ class top_block(gr.top_block):
         # Blocks
         ##################################################
 
-        self.zeromq_pub_sink_0_0_0 = zeromq.pub_sink(gr.sizeof_float, 1024, 'tcp://127.0.0.1:5557', 100, False, (-1), '', True, True)
+        self.zeromq_pub_sink_0_0_0 = zeromq.pub_sink(gr.sizeof_float, 1024, 'tcp://127.0.0.1:5557', 0, False, (-1), '', True, True)
         self.zeromq_pub_sink_0_0 = zeromq.pub_sink(gr.sizeof_gr_complex, 1024, 'tcp://127.0.0.1:5556', 100, False, (-1), '', True, True)
         self.zeromq_pub_sink_0 = zeromq.pub_sink(gr.sizeof_gr_complex, 1024, 'tcp://127.0.0.1:5555', 100, False, (-1), '', True, True)
         self.xmlrpc_server_0 = SimpleXMLRPCServer(('localhost', 8080), allow_none=True)
@@ -91,6 +91,11 @@ class top_block(gr.top_block):
         self.rtlsdr_source_0.set_bb_gain(gain_bb, 0)
         self.rtlsdr_source_0.set_antenna('', 0)
         self.rtlsdr_source_0.set_bandwidth(0, 0)
+        self.rational_resampler_xxx_0 = filter.rational_resampler_fff(
+                interpolation=1,
+                decimation=4,
+                taps=[],
+                fractional_bw=0)
         self.low_pass_filter_0_1 = filter.fir_filter_ccf(
             1,
             firdes.low_pass(
@@ -98,7 +103,7 @@ class top_block(gr.top_block):
                 (sdr_samp_rate/10),
                 wfm_co_freq,
                 25000,
-                window.WIN_HAMMING,
+                window.WIN_BLACKMAN,
                 6.76))
         self.low_pass_filter_0_0_0 = filter.fir_filter_ccf(
             10,
@@ -116,7 +121,7 @@ class top_block(gr.top_block):
                 (sdr_samp_rate/10),
                 am_co_freq,
                 5000,
-                window.WIN_HAMMING,
+                window.WIN_BLACKMAN,
                 6.76))
         self.low_pass_filter_0 = filter.fir_filter_ccf(
             5,
@@ -125,7 +130,7 @@ class top_block(gr.top_block):
                 (sdr_samp_rate/10),
                 nfm_co_freq,
                 5000,
-                window.WIN_HAMMING,
+                window.WIN_BLACKMAN,
                 6.76))
         self.fft_vxx_0_0 = fft.fft_vfc(1024, True, window.blackmanharris(1024), True, 1)
         self.fft_vxx_0 = fft.fft_vcc(1024, True, window.blackmanharris(1024), True, 1)
@@ -147,8 +152,8 @@ class top_block(gr.top_block):
                 (sdr_samp_rate/10),
                 lsb_co_freq_low,
                 lsb_co_freq_high,
-                1000,
-                window.WIN_HAMMING,
+                300,
+                window.WIN_BLACKMAN,
                 6.76))
         self.band_pass_filter_0 = filter.fir_filter_ccc(
             5,
@@ -157,8 +162,8 @@ class top_block(gr.top_block):
                 (sdr_samp_rate/10),
                 usb_co_freq_low,
                 usb_co_freq_high,
-                1000,
-                window.WIN_HAMMING,
+                300,
+                window.WIN_BLACKMAN,
                 6.76))
         self.audio_sink_0 = audio.sink(48000, '', False)
         self.analog_wfm_rcv_0 = analog.wfm_rcv(
@@ -181,6 +186,10 @@ class top_block(gr.top_block):
         	audio_pass=5000,
         	audio_stop=5500,
         )
+        self.analog_agc_xx_1_1 = analog.agc_cc((625e-6), 1.0, 1.0)
+        self.analog_agc_xx_1_1.set_max_gain(65536)
+        self.analog_agc_xx_1_0 = analog.agc_cc((625e-6), 1.0, 1.0)
+        self.analog_agc_xx_1_0.set_max_gain(65536)
         self.analog_agc_xx_1 = analog.agc_cc((625e-6), 1.0, 1.0)
         self.analog_agc_xx_1.set_max_gain(65536)
 
@@ -188,7 +197,9 @@ class top_block(gr.top_block):
         ##################################################
         # Connections
         ##################################################
-        self.connect((self.analog_agc_xx_1, 0), (self.blocks_selector_0, 0))
+        self.connect((self.analog_agc_xx_1, 0), (self.analog_am_demod_cf_0, 0))
+        self.connect((self.analog_agc_xx_1_0, 0), (self.blocks_complex_to_real_0, 0))
+        self.connect((self.analog_agc_xx_1_1, 0), (self.blocks_complex_to_real_0_0, 0))
         self.connect((self.analog_am_demod_cf_0, 0), (self.blocks_selector_0_0, 0))
         self.connect((self.analog_const_source_x_0, 0), (self.blocks_multiply_xx_1_0, 1))
         self.connect((self.analog_nbfm_rx_0, 0), (self.blocks_selector_0_0, 1))
@@ -196,13 +207,12 @@ class top_block(gr.top_block):
         self.connect((self.analog_simple_squelch_cc_1, 0), (self.analog_nbfm_rx_0, 0))
         self.connect((self.analog_simple_squelch_cc_2, 0), (self.analog_wfm_rcv_0, 0))
         self.connect((self.analog_wfm_rcv_0, 0), (self.blocks_selector_0_0, 2))
-        self.connect((self.band_pass_filter_0, 0), (self.blocks_complex_to_real_0, 0))
-        self.connect((self.band_pass_filter_0_0, 0), (self.blocks_complex_to_real_0_0, 0))
+        self.connect((self.band_pass_filter_0, 0), (self.analog_agc_xx_1_0, 0))
+        self.connect((self.band_pass_filter_0_0, 0), (self.analog_agc_xx_1_1, 0))
         self.connect((self.blocks_complex_to_real_0, 0), (self.blocks_selector_0_0, 3))
         self.connect((self.blocks_complex_to_real_0_0, 0), (self.blocks_selector_0_0, 4))
         self.connect((self.blocks_multiply_xx_1, 0), (self.low_pass_filter_0_0_0, 0))
         self.connect((self.blocks_multiply_xx_1_0, 0), (self.audio_sink_0, 0))
-        self.connect((self.blocks_multiply_xx_1_0, 0), (self.blocks_stream_to_vector_0_0_0, 0))
         self.connect((self.blocks_selector_0, 3), (self.band_pass_filter_0, 0))
         self.connect((self.blocks_selector_0, 4), (self.band_pass_filter_0_0, 0))
         self.connect((self.blocks_selector_0, 1), (self.low_pass_filter_0, 0))
@@ -210,15 +220,17 @@ class top_block(gr.top_block):
         self.connect((self.blocks_selector_0, 2), (self.low_pass_filter_0_1, 0))
         self.connect((self.blocks_selector_0_0, 0), (self.blocks_multiply_xx_1_0, 0))
         self.connect((self.blocks_selector_0_0, 0), (self.blocks_stream_to_vector_0_0, 0))
+        self.connect((self.blocks_selector_0_0, 0), (self.rational_resampler_xxx_0, 0))
         self.connect((self.blocks_stream_to_vector_0, 0), (self.fft_vxx_0, 0))
         self.connect((self.blocks_stream_to_vector_0_0, 0), (self.fft_vxx_0_0, 0))
         self.connect((self.blocks_stream_to_vector_0_0_0, 0), (self.zeromq_pub_sink_0_0_0, 0))
         self.connect((self.fft_vxx_0, 0), (self.zeromq_pub_sink_0, 0))
         self.connect((self.fft_vxx_0_0, 0), (self.zeromq_pub_sink_0_0, 0))
         self.connect((self.low_pass_filter_0, 0), (self.analog_simple_squelch_cc_1, 0))
-        self.connect((self.low_pass_filter_0_0, 0), (self.analog_am_demod_cf_0, 0))
-        self.connect((self.low_pass_filter_0_0_0, 0), (self.analog_agc_xx_1, 0))
+        self.connect((self.low_pass_filter_0_0, 0), (self.analog_agc_xx_1, 0))
+        self.connect((self.low_pass_filter_0_0_0, 0), (self.blocks_selector_0, 0))
         self.connect((self.low_pass_filter_0_1, 0), (self.analog_simple_squelch_cc_2, 0))
+        self.connect((self.rational_resampler_xxx_0, 0), (self.blocks_stream_to_vector_0_0_0, 0))
         self.connect((self.rtlsdr_source_0, 0), (self.blocks_multiply_xx_1, 0))
         self.connect((self.rtlsdr_source_0, 0), (self.blocks_stream_to_vector_0, 0))
 
@@ -249,21 +261,21 @@ class top_block(gr.top_block):
 
     def set_wfm_co_freq(self, wfm_co_freq):
         self.wfm_co_freq = wfm_co_freq
-        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.wfm_co_freq, 25000, window.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.wfm_co_freq, 25000, window.WIN_BLACKMAN, 6.76))
 
     def get_usb_co_freq_low(self):
         return self.usb_co_freq_low
 
     def set_usb_co_freq_low(self, usb_co_freq_low):
         self.usb_co_freq_low = usb_co_freq_low
-        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.usb_co_freq_low, self.usb_co_freq_high, 1000, window.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.usb_co_freq_low, self.usb_co_freq_high, 300, window.WIN_BLACKMAN, 6.76))
 
     def get_usb_co_freq_high(self):
         return self.usb_co_freq_high
 
     def set_usb_co_freq_high(self, usb_co_freq_high):
         self.usb_co_freq_high = usb_co_freq_high
-        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.usb_co_freq_low, self.usb_co_freq_high, 1000, window.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.usb_co_freq_low, self.usb_co_freq_high, 300, window.WIN_BLACKMAN, 6.76))
 
     def get_syn_mode(self):
         return self.syn_mode
@@ -285,12 +297,12 @@ class top_block(gr.top_block):
     def set_sdr_samp_rate(self, sdr_samp_rate):
         self.sdr_samp_rate = sdr_samp_rate
         self.analog_sig_source_x_1.set_sampling_freq(self.sdr_samp_rate)
-        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.usb_co_freq_low, self.usb_co_freq_high, 1000, window.WIN_HAMMING, 6.76))
-        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.lsb_co_freq_low, self.lsb_co_freq_high, 1000, window.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.nfm_co_freq, 5000, window.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.am_co_freq, 5000, window.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.usb_co_freq_low, self.usb_co_freq_high, 300, window.WIN_BLACKMAN, 6.76))
+        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.lsb_co_freq_low, self.lsb_co_freq_high, 300, window.WIN_BLACKMAN, 6.76))
+        self.low_pass_filter_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.nfm_co_freq, 5000, window.WIN_BLACKMAN, 6.76))
+        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.am_co_freq, 5000, window.WIN_BLACKMAN, 6.76))
         self.low_pass_filter_0_0_0.set_taps(firdes.low_pass(1, self.sdr_samp_rate, self.receive_width, 5000, window.WIN_HAMMING, 6.76))
-        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.wfm_co_freq, 25000, window.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_1.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.wfm_co_freq, 25000, window.WIN_BLACKMAN, 6.76))
         self.rtlsdr_source_0.set_sample_rate(self.sdr_samp_rate)
 
     def get_samp_rate(self):
@@ -318,21 +330,21 @@ class top_block(gr.top_block):
 
     def set_nfm_co_freq(self, nfm_co_freq):
         self.nfm_co_freq = nfm_co_freq
-        self.low_pass_filter_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.nfm_co_freq, 5000, window.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.nfm_co_freq, 5000, window.WIN_BLACKMAN, 6.76))
 
     def get_lsb_co_freq_low(self):
         return self.lsb_co_freq_low
 
     def set_lsb_co_freq_low(self, lsb_co_freq_low):
         self.lsb_co_freq_low = lsb_co_freq_low
-        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.lsb_co_freq_low, self.lsb_co_freq_high, 1000, window.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.lsb_co_freq_low, self.lsb_co_freq_high, 300, window.WIN_BLACKMAN, 6.76))
 
     def get_lsb_co_freq_high(self):
         return self.lsb_co_freq_high
 
     def set_lsb_co_freq_high(self, lsb_co_freq_high):
         self.lsb_co_freq_high = lsb_co_freq_high
-        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.lsb_co_freq_low, self.lsb_co_freq_high, 1000, window.WIN_HAMMING, 6.76))
+        self.band_pass_filter_0_0.set_taps(firdes.complex_band_pass(1, (self.sdr_samp_rate/10), self.lsb_co_freq_low, self.lsb_co_freq_high, 300, window.WIN_BLACKMAN, 6.76))
 
     def get_gain_rf(self):
         return self.gain_rf
@@ -375,7 +387,7 @@ class top_block(gr.top_block):
 
     def set_am_co_freq(self, am_co_freq):
         self.am_co_freq = am_co_freq
-        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.am_co_freq, 5000, window.WIN_HAMMING, 6.76))
+        self.low_pass_filter_0_0.set_taps(firdes.low_pass(1, (self.sdr_samp_rate/10), self.am_co_freq, 5000, window.WIN_BLACKMAN, 6.76))
 
 
 
