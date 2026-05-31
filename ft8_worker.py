@@ -25,7 +25,7 @@ def manual_time_sync():
         _time_offset = 15.0 - remainder
     else:
         _time_offset = -remainder
-    print(f"⏱️ [离线校时] 咔哒！对齐成功！系统余数: {remainder:.3f}s -> 注入补偿: {_time_offset:.3f}s")
+    print(f" [校时] 对齐成功！系统余数: {remainder:.3f}s -> 注入补偿: {_time_offset:.3f}s")
 
 # =========================================================
 # 2. 完美的虚拟声卡引擎 (异步泵 + 实时强制排空版)
@@ -56,7 +56,7 @@ class MockStream:
             except Exception:
                 break
         if count > 0:
-            print(f"🧹 [虚拟声卡] 时钟保卫战：已冲刷掉 {count} 块积压的历史音频，强制对齐当前时间！")
+            print(f"🧹 [虚拟声卡] ：已冲刷掉 {count} 块积压的历史音频")
 
     def read(self, num_frames, exception_on_overflow=False):
         global _global_backend
@@ -78,7 +78,7 @@ class MockStream:
                 self._debug_counter += 1
                 if self._debug_counter % 50 == 1:
                     peak_amp = np.max(np.abs(self.buffer)) if len(self.buffer) > 0 else 0.0
-                    print(f"🌊 [ZMQ 音频泵] 缓冲: {len(self.buffer):04d} | 峰值电平: {peak_amp:.3f} | 指针推进中...")
+                    # print(f" [ZMQ 音频泵] 缓冲: {len(self.buffer):04d} | 峰值电平: {peak_amp:.3f} | 指针推进中...")
             else:
                 if _sys_time.perf_counter() - start_wait > max_wait: 
                     print("⚠️ [ZMQ 音频泵] 断流警告！尝试填充维持相位...")

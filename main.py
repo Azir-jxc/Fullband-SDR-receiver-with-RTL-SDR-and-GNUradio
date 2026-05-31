@@ -280,7 +280,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         except KeyError:
             self.backend.set_demod_mode(3)
         self.backend.set_filter_bw("USB", 200, 3000)
-        
+
         self.update_status_badges()
 
         # 启动后台解码线程
@@ -311,7 +311,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         """处理弹窗内校时按钮按下的事件，并将信息推送到历史记录"""
         manual_time_sync() # 调用底层的极客修补算法
         if self.ft8_dialog:
-            self.ft8_dialog.append_log("【校时】⏱️手动对齐周期完成！")
+            self.ft8_dialog.append_log("【校时】手动对齐周期完成！")
 
     def stop_ft8_mode(self):
         """当弹窗被关闭时，彻底停止底层解调"""
@@ -338,10 +338,10 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         freq_hz = candidate.fHz
         
         log_entry = f"[{time.strftime('%H:%M:%S')}] 频偏:{freq_hz:4.0f}Hz | SNR:{snr:+03d} | DT:{dt:4.1f}s | {msg_text}"
-        print(f"🔥 解码成功 -> {log_entry}")
+        print(f" 解码成功 -> {log_entry}")
         
         if self.ft8_dialog:
-            self.ft8_dialog.append_log(f"🔥 {log_entry}", is_success=True)
+            self.ft8_dialog.append_log(f" {log_entry}", is_success=True)
     # ======================================================
 
     def open_numpad_dialog(self):
