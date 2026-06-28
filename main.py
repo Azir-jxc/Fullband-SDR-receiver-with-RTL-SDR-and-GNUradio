@@ -53,6 +53,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ft8_dialog = None # 监控弹窗对象
         # ==============================
         
+        # 热插拔状态追踪
+        self.sdr_is_connected = False
+        
         # 首次拉起底层进程 (默认模式 0)
         self.restart_sdr_process(0)
 
@@ -90,6 +93,14 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.sync_timer = QtCore.QTimer()
         self.sync_timer.timeout.connect(self.sync_status)
         self.sync_timer.start(1000) 
+
+        # 硬件插拔检测定时器 (2秒检测一次)
+        self.hw_detect_timer = QtCore.QTimer()
+        self.hw_detect_timer.timeout.connect(self.check_sdr_connection)
+        self.hw_detect_timer.start(2000)
+
+        # 强制首次检测
+        self.check_sdr_connection()
 
     def restart_sdr_process(self, mode_idx):
         print(f"[前端管控] 正在重启底层无线电进程，直采模式切换为: {mode_idx} ...")
@@ -196,17 +207,18 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 line.setVisible(False)
 
     def update_status_badges(self):
-        self.ui.lbl_mod.setText(f"MOD: {self.cur_demod_mode}")
-        self.ui.lbl_tune.setText("TUNE: FREE" if self.tuning_mode == "FREE" else "TUNE: CENT")
+        # 配合 UI 的极限缩写进行更新
+        self.ui.lbl_mod.setText(f"M:{self.cur_demod_mode}")
+        self.ui.lbl_tune.setText("T:FREE" if self.tuning_mode == "FREE" else "T:CENT")
         
         samp_abbr = "QUAD"
-        if "I 通道" in self.cur_samp_mode: samp_abbr = "DIR-I"
-        elif "Q 通道" in self.cur_samp_mode: samp_abbr = "DIR-Q"
-        self.ui.lbl_samp.setText(f"SMP: {samp_abbr}")
+        if "I 通道" in self.cur_samp_mode: samp_abbr = "D-I"
+        elif "Q 通道" in self.cur_samp_mode: samp_abbr = "D-Q"
+        self.ui.lbl_samp.setText(f"S:{samp_abbr}")
         
-        self.ui.lbl_sr.setText(f"SR: {self.cur_sr_mhz}M")
-        self.ui.lbl_sql.setText(f"SQL: {self.cur_squelch}")
-        self.ui.lbl_avg.setText(f"AVG: {self.avg_lengths[self.avg_index]}")
+        self.ui.lbl_sr.setText(f"SR:{self.cur_sr_mhz}M")
+        self.ui.lbl_sql.setText(f"SQ:{self.cur_squelch}")
+        self.ui.lbl_avg.setText(f"A:{self.avg_lengths[self.avg_index]}")
 
     def update_waterfall_rect(self):
         mhz = self.sdr_freq_hz / 1e6
@@ -261,18 +273,66 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             
         if hasattr(self.ui, 'btn_ft8'):
             self.ui.btn_ft8.clicked.connect(self.toggle_ft8_mode)
+            
+        # 绑定关机与重启按钮
+        self.ui.btn_reboot.clicked.connect(self.system_reboot)
+        self.ui.btn_shutdown.clicked.connect(self.system_shutdown)
 
-    # ================== FT8 解码相关方法 (全新弹窗逻辑) ==================
+    # ================= 电源与热插拔控制逻辑 =================
+    def system_reboot(self):
+        reply = QtWidgets.QMessageBox.question(self, '确认操作', '确定要重启树莓派吗？', 
+                                              QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
+            subprocess.Popen("sudo reboot", shell=True)
+
+    def system_shutdown(self):
+        reply = QtWidgets.QMessageBox.question(self, '确认操作', '确定要关闭树莓派吗？', 
+                                              QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
+            subprocess.Popen("sudo poweroff", shell=True)
+
+    def check_sdr_connection(self):
+        """利用 lsusb 检查是否插入了 RTL-SDR"""
+        try:
+            # 加上绝对路径 /usr/bin/lsusb 防止环境变量丢失
+            output = subprocess.check_output("/usr/bin/lsusb", shell=True, text=True)
+            current_connected = "RTL2838" in output or "Realtek" in output or "RTL2832" in output
+            
+            if current_connected and not self.sdr_is_connected:
+                self.sdr_is_connected = True
+                self.ui.lbl_sdr_status.setText("🟢正常")
+                self.ui.lbl_sdr_status.setStyleSheet("background-color: #111; color: #00FF00; border: 1px solid #00FF00; border-radius: 3px; padding: 2px 3px;")
+                
+                mode_idx = 0 if "正交" in self.cur_samp_mode else (1 if "I 通道" in self.cur_samp_mode else 2)
+                self.restart_sdr_process(mode_idx)
+
+            elif not current_connected and getattr(self, '_last_ui_state', '') != 'offline':
+                self.sdr_is_connected = False
+                self._last_ui_state = 'offline'
+                self.ui.lbl_sdr_status.setText("🔴离线")
+                self.ui.lbl_sdr_status.setStyleSheet("background-color: #111; color: #FF1744; border: 1px solid #FF1744; border-radius: 3px; padding: 2px 3px;")
+                
+                if self.gr_process:
+                    self.gr_process.terminate()
+                    self.gr_process.wait()
+                    self.gr_process = None
+                    
+            elif current_connected:
+                self._last_ui_state = 'online'
+                
+        except Exception as e:
+            self.ui.lbl_sdr_status.setText("🟡异常")
+            self.ui.lbl_sdr_status.setStyleSheet("background-color: #111; color: #FFEB3B; border: 1px solid #FFEB3B; border-radius: 3px; padding: 2px 3px;")
+            print(f"[监控] 硬件检测异常: {e}")
+
+    # ================== FT8 解码相关方法 ==================
     def toggle_ft8_mode(self):
-        """点击主界面开启按钮，拉起 FT8 独立监控弹窗"""
-        # 如果已经开启，仅仅是把弹窗前置显示
         if self.ft8_mode_active and self.ft8_dialog:
             self.ft8_dialog.show()
             self.ft8_dialog.raise_()
             return
 
         print("\n[FT8] === 正在启动 FT8 解码模式 ===")
-        # 强制设置接收机参数以适应 FT8
         self.cur_demod_mode = "USB"
         try:
             idx = DEMOD_MODES["USB"][0]
@@ -283,7 +343,6 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
         self.update_status_badges()
 
-        # 启动后台解码线程
         if self.ft8_thread is None:
             self.ft8_thread = FT8DecoderThread(self.backend, sample_rate=48000)
             self.ft8_thread.sig_message_decoded.connect(self.on_ft8_message_decoded)
@@ -292,12 +351,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             
         self.ft8_mode_active = True
         
-        # 实例化并显示监控弹窗
         if self.ft8_dialog is None:
             from ui_layout import FT8MonitorDialog
             self.ft8_dialog = FT8MonitorDialog(self)
-            
-            # 绑定弹窗内部按钮和关闭事件
             self.ft8_dialog.sig_sync_requested.connect(self.on_manual_sync_clicked)
             self.ft8_dialog.sig_closed.connect(self.stop_ft8_mode)
             
@@ -308,13 +364,11 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ft8_dialog.raise_()
         
     def on_manual_sync_clicked(self):
-        """处理弹窗内校时按钮按下的事件，并将信息推送到历史记录"""
-        manual_time_sync() # 调用底层的极客修补算法
+        manual_time_sync() 
         if self.ft8_dialog:
             self.ft8_dialog.append_log("【校时】手动对齐周期完成！")
 
     def stop_ft8_mode(self):
-        """当弹窗被关闭时，彻底停止底层解调"""
         print("\n[FT8] === 正在停止 FT8 解码模式 ===")
         if self.ft8_thread:
             self.ft8_thread.stop()
@@ -323,15 +377,15 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.ft8_mode_active = False
         self.ft8_dialog = None
         print("[FT8] 解码模式已彻底关闭。")
+        self.activateWindow()
+        self.setFocus()
 
     def on_ft8_status_update(self, msg):
-        """将后台状态推送到弹窗内"""
         print(f"[FT8 状态] {msg}")
         if self.ft8_dialog:
             self.ft8_dialog.append_log(f"【状态】{msg}")
 
     def on_ft8_message_decoded(self, candidate):
-        """将成功解码的呼号推送到弹窗内"""
         msg_text = candidate.msg
         snr = candidate.snr
         dt = candidate.dt
@@ -352,6 +406,9 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             if new_mhz > 0:
                 new_hz = new_mhz * 1e6
                 self.safe_set_sdr_and_target_freq(new_hz)
+        
+        self.activateWindow()
+        self.setFocus()
 
     def on_freq_step_requested(self, delta_hz):
         if self.tuning_mode == "CENTRAL":
@@ -381,13 +438,19 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             cur_avg_str = str(self.avg_lengths[self.avg_index])
             self.spectrum_dialog = SpectrumConfigDialog(self, self.tuning_mode, cur_avg_str, self.grid_enabled)
             self.spectrum_dialog.apply_btn.clicked.connect(self.apply_spectrum_config)
-            self.spectrum_dialog.close_btn.clicked.connect(self.spectrum_dialog.hide)
+            self.spectrum_dialog.close_btn.clicked.connect(self.close_spectrum_dialog)
             
         self.spectrum_dialog.tune_combo.setCurrentIndex(0 if self.tuning_mode == "CENTRAL" else 1)
         self.spectrum_dialog.avg_combo.setCurrentText(str(self.avg_lengths[self.avg_index]))
         self.spectrum_dialog.grid_combo.setCurrentIndex(0 if self.grid_enabled else 1)
         self.spectrum_dialog.show()
         self.spectrum_dialog.raise_()
+
+    def close_spectrum_dialog(self):
+        if self.spectrum_dialog:
+            self.spectrum_dialog.hide()
+        self.activateWindow()
+        self.setFocus()
 
     def apply_spectrum_config(self):
         if not self.spectrum_dialog: return
@@ -417,6 +480,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         self.update_status_badges()
         self.update_grid_overlay() 
         self.spectrum_dialog.hide()
+        self.activateWindow()
+        self.setFocus()
 
     def open_demod_config_dialog(self):
         if self.demod_dialog is None:
@@ -427,11 +492,17 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
                 self, self.cur_demod_mode, cur_low, cur_high, self.cur_squelch
             )
             self.demod_dialog.apply_btn.clicked.connect(self.apply_demod_config)
-            self.demod_dialog.close_btn.clicked.connect(self.demod_dialog.hide)
+            self.demod_dialog.close_btn.clicked.connect(self.close_demod_dialog)
             
         self.demod_dialog.mode_combo.setCurrentText(self.cur_demod_mode)
         self.demod_dialog.show()
         self.demod_dialog.raise_()
+
+    def close_demod_dialog(self):
+        if self.demod_dialog:
+            self.demod_dialog.hide()
+        self.activateWindow()
+        self.setFocus()
 
     def apply_demod_config(self):
         if not self.demod_dialog: return
@@ -454,6 +525,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
         
         self.update_status_badges()
         self.demod_dialog.hide()
+        self.activateWindow()
+        self.setFocus()
 
     def open_config_dialog(self):
         if self.config_dialog is None:
@@ -466,10 +539,16 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
             self.config_dialog.if_slider.valueChanged.connect(self.on_if_changed)
             self.config_dialog.bb_slider.valueChanged.connect(self.on_bb_changed)
             self.config_dialog.apply_btn.clicked.connect(self.apply_hardware_config)
-            self.config_dialog.close_btn.clicked.connect(self.config_dialog.hide)
+            self.config_dialog.close_btn.clicked.connect(self.close_config_dialog)
             
         self.config_dialog.show()
         self.config_dialog.raise_()
+
+    def close_config_dialog(self):
+        if self.config_dialog:
+            self.config_dialog.hide()
+        self.activateWindow()
+        self.setFocus()
 
     def on_rf_changed(self, val):
         self.cur_rf_gain = val; self.backend.set_gain_rf(val)
@@ -498,6 +577,8 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
 
         self.update_status_badges()
         self.config_dialog.hide()
+        self.activateWindow()
+        self.setFocus()
 
     def update_filter_region(self, center_freq_mhz=None):
         if center_freq_mhz is None: center_freq_mhz = self.ui.center_line.value()
@@ -643,6 +724,7 @@ class SpectrumAnalyzer(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         self.plot_timer.stop()
         self.sync_timer.stop()
+        self.hw_detect_timer.stop()
 
         # 确保窗口关闭时彻底杀掉后台进程
         self.stop_ft8_mode()
@@ -664,6 +746,11 @@ if __name__ == '__main__':
     app.setFont(font)
     
     main_window = SpectrumAnalyzer()
-    main_window.show()
+    
+    # 强制无边框全屏显示
+    main_window.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+    main_window.showFullScreen()
+    # main_window.resize(800, 480)
+    # main_window.show()
     
     sys.exit(app.exec_())

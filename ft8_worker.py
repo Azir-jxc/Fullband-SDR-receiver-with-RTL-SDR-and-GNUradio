@@ -221,6 +221,11 @@ class FT8DecoderThread(QThread):
         if self.audio_in:
             self.audio_in.running = False 
             
+            # 【关键修复】：手动掐断虚拟声卡的后台泵血线程，释放 ZMQ 资源
+            if hasattr(self.audio_in, 'stream') and self.audio_in.stream is not None:
+                self.audio_in.stream.stop_stream()
+                self.audio_in.stream.close()
+            
         if self.rx:
             self.rx.stop()
             

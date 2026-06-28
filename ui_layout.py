@@ -20,11 +20,11 @@ QWidget#FreqContainer {
 QPushButton { 
     background-color: #2D2D2D; 
     border: 1px solid #555555; 
-    border-radius: 6px; 
+    border-radius: 4px; 
     color: #E0E0E0; 
-    font-size: 14px; 
+    font-size: 13px; 
     font-weight: bold; 
-    padding: 8px 15px; 
+    padding: 4px 8px; 
 }
 QPushButton:pressed { 
     background-color: #FFFF00; 
@@ -74,21 +74,19 @@ class FT8MonitorDialog(QtWidgets.QDialog):
         self.setMinimumSize(550, 450)
         self.setStyleSheet(DARK_STYLE)
         
-        # 保持窗口在最前端
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
+        # 修改：使用 Dialog | FramelessWindowHint 替代 Tool，保留保持置顶特性
+        self.setWindowFlags(QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint)
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(10)
         
-        # --- 顶部：控制与状态栏 ---
         ctrl_layout = QtWidgets.QHBoxLayout()
         
         lbl_title = QtWidgets.QLabel("接收周期:")
         lbl_title.setStyleSheet("font-weight: bold; font-size: 14px;")
         
-        # 15秒黄色进度条
         self.progress = QtWidgets.QProgressBar()
-        self.progress.setRange(0, 150) # 模拟 15.0 秒
+        self.progress.setRange(0, 150)
         self.progress.setTextVisible(False)
         self.progress.setFixedHeight(22)
         self.progress.setStyleSheet("""
@@ -96,24 +94,28 @@ class FT8MonitorDialog(QtWidgets.QDialog):
             QProgressBar::chunk { background-color: #FFD700; border-radius: 3px; }
         """)
         
-        # 倒计时文本
         self.lbl_time = QtWidgets.QLabel("00.0s / 15s")
         self.lbl_time.setStyleSheet("font-size: 16px; font-weight: bold; color: #00FFCC; font-family: 'Consolas';")
         self.lbl_time.setFixedWidth(100)
         
-        # 校时按钮
         self.btn_sync = QtWidgets.QPushButton("⏱️ 手动校时")
         self.btn_sync.setStyleSheet("background-color: #4CAF50; color: white; padding: 5px 10px;")
         self.btn_sync.clicked.connect(self.sig_sync_requested.emit)
+
+        # ================= 新增关闭按钮 =================
+        self.btn_close = QtWidgets.QPushButton("✖")
+        self.btn_close.setStyleSheet("background-color: #D32F2F; color: white; padding: 5px 10px; margin-left: 10px;")
+        self.btn_close.clicked.connect(self.close)
+        # ===============================================
 
         ctrl_layout.addWidget(lbl_title)
         ctrl_layout.addWidget(self.progress, stretch=1)
         ctrl_layout.addWidget(self.lbl_time)
         ctrl_layout.addWidget(self.btn_sync)
+        ctrl_layout.addWidget(self.btn_close)  # 将新增的关闭按钮添加到顶部的横向布局中
         
         layout.addLayout(ctrl_layout)
 
-        # --- 中部：历史报文展示区 ---
         self.log_box = QtWidgets.QTextBrowser()
         self.log_box.setStyleSheet("""
             QTextBrowser {
@@ -128,36 +130,27 @@ class FT8MonitorDialog(QtWidgets.QDialog):
         """)
         layout.addWidget(self.log_box, stretch=1)
 
-        # UI 刷新定时器 (100ms更新一次进度条)
         self.ui_timer = QtCore.QTimer(self)
         self.ui_timer.timeout.connect(self.update_timer_display)
         self.ui_timer.start(100)
         
     def update_timer_display(self):
-        """利用被劫持的系统时间计算并刷新进度条"""
-        # 注意：这里的 time.time() 会自动获取 ft8_worker 补偿过的时间
         current_raw = time.time()
         rem = current_raw % 15.0
-        
-        # 进度条平滑填充
         self.progress.setValue(int(rem * 10))
         self.lbl_time.setText(f"{rem:04.1f}s / 15s")
 
     def append_log(self, text, is_success=False):
-        """向日志框添加内容"""
-        # 如果是成功解码，给个特殊的颜色包裹
         if is_success:
             html = f"<span style='color: #FFFF00;'>{text}</span>"
         else:
             html = f"<span style='color: #00FFCC;'>{text}</span>"
             
         self.log_box.append(html)
-        # 滚动到底部
         scrollbar = self.log_box.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
     def closeEvent(self, event):
-        """窗口关闭时通知主程序停止 FT8"""
         self.ui_timer.stop()
         self.sig_closed.emit()
         super().closeEvent(event)
@@ -307,7 +300,7 @@ class DigitLabel(QtWidgets.QLabel):
         self.set_selected(False)
 
     def set_selected(self, selected):
-        base_style = "font-size: 56px; font-weight: bold; font-family: 'Consolas', monospace; border: none;"
+        base_style = "font-size: 42px; font-weight: bold; font-family: 'Consolas', monospace; border: none;"
         if selected:
             self.setStyleSheet(f"{base_style} color: #000000; background-color: #FFFF00; border-radius: 6px;")
         else:
@@ -346,7 +339,7 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         
         layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(15, 5, 15, 5)
+        layout.setContentsMargins(10, 2, 10, 2)
         layout.setSpacing(0) 
         
         self.digits = []
@@ -356,9 +349,9 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         self.add_digit(layout, 1000000)    
         
         dot = QtWidgets.QLabel(".")
-        dot.setStyleSheet("color: #FFFF00; font-size: 56px; font-weight: bold; font-family: 'Consolas', monospace; border: none; background: transparent;")
+        dot.setStyleSheet("color: #FFFF00; font-size: 42px; font-weight: bold; font-family: 'Consolas'; border: none; background: transparent;")
         dot.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignCenter)
-        dot.setFixedSize(20, 70) 
+        dot.setFixedSize(15, 55) 
         layout.addWidget(dot)
         
         self.add_digit(layout, 100000)     
@@ -366,15 +359,15 @@ class InteractiveFreqDisplay(QtWidgets.QWidget):
         self.add_digit(layout, 1000)       
         
         unit = QtWidgets.QLabel(" MHz")
-        unit.setStyleSheet("color: #FFFF00; font-size: 26px; font-weight: bold; border: none; background: transparent; padding-bottom: 12px;")
+        unit.setStyleSheet("color: #FFFF00; font-size: 20px; font-weight: bold; border: none; background: transparent; padding-bottom: 8px;")
         unit.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignLeft)
-        unit.setFixedHeight(70)
+        unit.setFixedHeight(55)
         layout.addWidget(unit)
         self.on_digit_selected(100000)
 
     def add_digit(self, layout, step_hz):
         lbl = DigitLabel(step_hz)
-        lbl.setFixedSize(38, 70) 
+        lbl.setFixedSize(30, 55) 
         lbl.sig_selected.connect(self.on_digit_selected)
         lbl.sig_stepped.connect(lambda direction, step=step_hz: self.sig_step_requested.emit(direction * step))
         lbl.sig_double_clicked.connect(self.sig_double_clicked.emit)
@@ -404,7 +397,9 @@ class SpectrumConfigDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("频谱与调谐设置")
         self.setMinimumWidth(300)
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool)
+        
+        # 修改：使用 Dialog | FramelessWindowHint 替代 Tool
+        self.setWindowFlags(QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint)
         self.setStyleSheet(DARK_STYLE)
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -451,7 +446,9 @@ class DemodConfigDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("解调与接收配置")
         self.setMinimumWidth(350)
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool)
+        
+        # 修改：使用 Dialog | FramelessWindowHint 替代 Tool
+        self.setWindowFlags(QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint)
         self.setStyleSheet(DARK_STYLE) 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(15)
@@ -507,7 +504,9 @@ class ConfigDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("硬件射频前端")
         self.setMinimumWidth(350)
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool) 
+        
+        # 修改：使用 Dialog | FramelessWindowHint 替代 Tool
+        self.setWindowFlags(QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint) 
         self.setStyleSheet(DARK_STYLE)
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(15)
@@ -560,7 +559,9 @@ class NumpadDialog(QtWidgets.QDialog):
         self.setWindowTitle("输入频率 (MHz)")
         self.setFixedSize(300, 380)
         self.setStyleSheet(DARK_STYLE)
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Tool)
+        
+        # 修改：使用 Dialog | FramelessWindowHint 替代 Tool
+        self.setWindowFlags(QtCore.Qt.Dialog | QtCore.Qt.FramelessWindowHint)
 
         layout = QtWidgets.QVBoxLayout(self)
 
@@ -625,35 +626,37 @@ class Ui_MainWindow:
     def create_status_badge(self, text, color="#00FFCC"):
         lbl = QtWidgets.QLabel(text)
         lbl.setAlignment(QtCore.Qt.AlignCenter)
-        lbl.setStyleSheet(f"background-color: #111111; color: {color}; border: 1px solid {color}; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; font-family: 'Consolas', monospace;")
+        lbl.setStyleSheet(f"background-color: #111111; color: {color}; border: 1px solid {color}; border-radius: 3px; padding: 2px 3px; font-size: 10px; font-weight: bold; font-family: 'Consolas', monospace;")
         return lbl
 
     def setup_ui(self, window):
         window.setWindowTitle("Malachite-Style SDR")
-        window.resize(1024, 600)
         window.setStyleSheet(DARK_STYLE) 
 
         main_widget = QtWidgets.QWidget()
         window.setCentralWidget(main_widget)
         
         root_layout = QtWidgets.QVBoxLayout(main_widget)
-        root_layout.setContentsMargins(10, 10, 10, 10)
-        root_layout.setSpacing(10)
+        root_layout.setContentsMargins(2, 2, 2, 2)
+        root_layout.setSpacing(4)
 
-        # ================= 1. 顶栏 =================
+        # ================= 1. 顶栏 (800px 极限无损压缩版) =================
         top_bar_layout = QtWidgets.QHBoxLayout()
-        top_bar_layout.setSpacing(15)
+        top_bar_layout.setSpacing(2) 
         
         status_layout = QtWidgets.QHBoxLayout()
-        status_layout.setSpacing(8)
-        self.lbl_mod = self.create_status_badge("MOD: WFM", "#00FFCC")
-        self.lbl_tune = self.create_status_badge("TUNE: CENT", "#FF9800")
-        self.lbl_samp = self.create_status_badge("SMP: QUAD", "#8BC34A")
-        self.lbl_sr = self.create_status_badge("SR: 2.4M", "#8BC34A")
-        self.lbl_sql = self.create_status_badge("SQL: -70", "#FF5252")
-        self.lbl_avg = self.create_status_badge("AVG: 1", "#E040FB") 
-        self.lbl_agc = self.create_status_badge("AGC: OFF", "#666666") 
+        status_layout.setSpacing(2)
         
+        self.lbl_sdr_status = self.create_status_badge("⚪检测", "#AAAAAA")
+        self.lbl_mod = self.create_status_badge("M:WFM", "#00FFCC")
+        self.lbl_tune = self.create_status_badge("T:CENT", "#FF9800")
+        self.lbl_samp = self.create_status_badge("S:QUAD", "#8BC34A")
+        self.lbl_sr = self.create_status_badge("SR:2.4M", "#8BC34A")
+        self.lbl_sql = self.create_status_badge("SQ:-70", "#FF5252")
+        self.lbl_avg = self.create_status_badge("A:1", "#E040FB")
+        self.lbl_agc = self.create_status_badge("AGC:0", "#666666")
+        
+        status_layout.addWidget(self.lbl_sdr_status)
         status_layout.addWidget(self.lbl_mod)
         status_layout.addWidget(self.lbl_tune)
         status_layout.addWidget(self.lbl_samp)
@@ -661,23 +664,29 @@ class Ui_MainWindow:
         status_layout.addWidget(self.lbl_sql)
         status_layout.addWidget(self.lbl_avg)
         status_layout.addWidget(self.lbl_agc)
+        
         top_bar_layout.addLayout(status_layout)
         top_bar_layout.addStretch() 
         
         btn_layout = QtWidgets.QHBoxLayout()
-        btn_layout.setSpacing(8)
+        btn_layout.setSpacing(2) 
         
-        # ====== 仅保留唯一的启动按钮 (校时移到了弹窗内) ======
-        self.btn_ft8 = QtWidgets.QPushButton("📡 开启 FT8")
+        self.btn_ft8 = QtWidgets.QPushButton("FT8")
+        self.demod_config_btn = QtWidgets.QPushButton("解调")
+        self.config_btn = QtWidgets.QPushButton("射频")
+        self.spectrum_config_btn = QtWidgets.QPushButton("频谱")
         
-        self.demod_config_btn = QtWidgets.QPushButton("解调设置")
-        self.config_btn = QtWidgets.QPushButton("射频前端")
-        self.spectrum_config_btn = QtWidgets.QPushButton("频谱设置")
+        self.btn_reboot = QtWidgets.QPushButton("🔄")
+        self.btn_shutdown = QtWidgets.QPushButton("⏻")
+        self.btn_reboot.setStyleSheet("background-color: #E65100; color: white; padding: 2px 6px; font-size: 14px;")
+        self.btn_shutdown.setStyleSheet("background-color: #B71C1C; color: white; padding: 2px 6px; font-size: 14px;")
         
         btn_layout.addWidget(self.btn_ft8)
         btn_layout.addWidget(self.demod_config_btn)
         btn_layout.addWidget(self.config_btn)
         btn_layout.addWidget(self.spectrum_config_btn)
+        btn_layout.addWidget(self.btn_reboot)
+        btn_layout.addWidget(self.btn_shutdown)
         
         top_bar_layout.addLayout(btn_layout)
         root_layout.addLayout(top_bar_layout)
@@ -690,9 +699,9 @@ class Ui_MainWindow:
         freq_layout.addWidget(self.freq_display)
         
         self.audio_container = QtWidgets.QWidget()
-        self.audio_container.setFixedHeight(95) 
+        self.audio_container.setFixedHeight(70) 
         audio_layout = QtWidgets.QVBoxLayout(self.audio_container)
-        audio_layout.setContentsMargins(15, 0, 15, 0) 
+        audio_layout.setContentsMargins(10, 0, 10, 0) 
         audio_layout.setSpacing(2)
         
         lbl_audio_title = QtWidgets.QLabel(" 音频频谱 ")
@@ -737,7 +746,7 @@ class Ui_MainWindow:
                 font-family: 'Microsoft YaHei', sans-serif;
                 font-size: 15px;
                 font-weight: bold;
-                margin-right: 10px;
+                margin-right: 5px;
             }
             QPushButton:hover { color: #FFFF00; border: 1px solid #FFFF00; }
             QPushButton:pressed { background-color: #FFFF00; color: #000000; }
@@ -869,6 +878,6 @@ class Ui_MainWindow:
         wf_layout.addWidget(self.colorbar_widget)
         self.splitter.addWidget(self.waterfall_container)
 
-        self.splitter.setSizes([150, 450]) 
+        self.splitter.setSizes([120, 250]) 
         main_content_layout.addWidget(self.splitter)
         root_layout.addLayout(main_content_layout)
